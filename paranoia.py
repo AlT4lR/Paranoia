@@ -18,8 +18,8 @@ HU_TAO_WHITE = "#FFFAFA"
 HU_TAO_DARK = "#333333"
 
 # --- CharacterAI Setup ---
-client = aiocai.Client('YOUR_CHARACTER_AI_KEY')  # Replace with your key
-USER_NAME = "Altair"  # User's name is permanently Altair
+client = aiocai.Client('U3dJdreV9rrvUiAnILMauI-oNH838a8E_kEYfOFPalE')  # Replace with your key
+USER_NAME = "Altair"  # User's name is Altair
 DEFAULT_USER_NAME = "Altair"  # Default name
 IDLE_TIMEOUT = 180  # seconds
 CHAR_ID = "YOUR_CHARACTER_ID"  # Replace with your character ID
