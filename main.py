@@ -1,5 +1,4 @@
 # main.py 
-
 import asyncio
 import tkinter as tk
 import tkinter.ttk as ttk
@@ -8,12 +7,12 @@ import os
 
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
-    # This is a more robust way to get the base path
+
     if getattr(sys, 'frozen', False):
-        # The application is frozen (packaged by PyInstaller)
+
         base_path = sys._MEIPASS
     else:
-        # The application is running in a normal Python environment
+
         base_path = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_path, relative_path)
 
@@ -72,7 +71,6 @@ async def main():
         try:
             root.update()
         except tk.TclError:
-            # This handles the case where the window is destroyed externally
             running = False
             break
         await asyncio.sleep(0.01)
@@ -110,10 +108,10 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except RuntimeError as e:
-        # Ignored specific error if loop is closed during shutdown
+
         if "Event loop is closed" not in str(e) and "Event loop stopped" not in str(e):
             raise
     finally:
-        # Actual cleanup happens here after the loop has finished
+
         if root and root.winfo_exists():
             root.destroy()

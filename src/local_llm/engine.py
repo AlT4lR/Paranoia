@@ -1,4 +1,4 @@
-# src/local_llm/engine.py (Final Corrected Version)
+# src/local_llm/engine.py
 
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 import torch
@@ -20,7 +20,7 @@ def initialize_model(model_path: str):
     print(f"Initializing local LLM from path: {model_path}...")
 
     try:
-        # Uses 'torch_dtype' for compatibility with the installed transformers version.
+
         model = AutoModelForCausalLM.from_pretrained(
             model_path,
             torch_dtype=torch.float32,
@@ -49,9 +49,7 @@ def generate_response(prompt: str) -> str:
         raise RuntimeError("Model has not been initialized. Call initialize_model() first.")
 
     try:
-        # ** THE FINAL FIX: We removed the confusing 'terminators' list and
-        # now use only the model's official End-Of-Sentence token. This
-        # prevents the model from generating an empty response. **
+
         outputs = llm_pipeline(
             prompt,
             max_new_tokens=256,
@@ -63,7 +61,7 @@ def generate_response(prompt: str) -> str:
             repetition_penalty=1.1     # Added to improve quality and stability
         )
         
-        # This logic correctly extracts the response.
+
         full_text = outputs[0]["generated_text"]
         response = full_text.split("<|assistant|>")[-1].strip()
         
