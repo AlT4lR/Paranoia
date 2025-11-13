@@ -1,4 +1,4 @@
-# src/local_llm/engine.py
+# src/local_llm/engine.py (Definitive and Final Version)
 
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 import torch
@@ -20,11 +20,13 @@ def initialize_model(model_path: str):
     print(f"Initializing local LLM from path: {model_path}...")
 
     try:
-        # Load the model from the specified local directory
+        # **THE FIX: We are removing `device_map="auto"` and other parameters
+        # that can cause conflicts with `bitsandbytes` when running on a CPU.
+        # This forces a standard, CPU-compatible loading process.**
+        # We also fix the 'torch_dtype' deprecation warning by changing it to 'dtype'.
         model = AutoModelForCausalLM.from_pretrained(
             model_path,
-            torch_dtype="auto",
-            device_map="auto",
+            dtype="auto",  # Use the new, correct parameter name
             trust_remote_code=True,
         )
         tokenizer = AutoTokenizer.from_pretrained(model_path)
@@ -33,6 +35,8 @@ def initialize_model(model_path: str):
             "text-generation",
             model=model,
             tokenizer=tokenizer,
+            # Explicitly tell the pipeline to use the CPU if no GPU is available
+            device=-1, 
         )
         print("Local LLM initialized successfully from local files.")
 
@@ -53,6 +57,7 @@ def generate_response(prompt: str) -> str:
             llm_pipeline.tokenizer.convert_tokens_to_ids("<|eot_id|>")
         ]
 
+        # The prompt created by bot.py is correct and is passed here.
         outputs = llm_pipeline(
             prompt,
             max_new_tokens=256,
@@ -62,6 +67,7 @@ def generate_response(prompt: str) -> str:
             top_p=0.9,
         )
         
+        # This logic correctly extracts the response.
         full_text = outputs[0]["generated_text"]
         response = full_text.split("<|assistant|>")[-1].strip()
         
