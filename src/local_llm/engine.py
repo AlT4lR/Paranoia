@@ -1,4 +1,4 @@
-# src/local_llm/engine.py (Definitive and Final Version)
+# src/local_llm/engine.py (Final Corrected Version)
 
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 import torch
@@ -20,13 +20,10 @@ def initialize_model(model_path: str):
     print(f"Initializing local LLM from path: {model_path}...")
 
     try:
-        # **THE FIX: We are removing `device_map="auto"` and other parameters
-        # that can cause conflicts with `bitsandbytes` when running on a CPU.
-        # This forces a standard, CPU-compatible loading process.**
-        # We also fix the 'torch_dtype' deprecation warning by changing it to 'dtype'.
+        # Uses 'torch_dtype' for compatibility with the installed transformers version.
         model = AutoModelForCausalLM.from_pretrained(
             model_path,
-            dtype="auto",  # Use the new, correct parameter name
+            torch_dtype=torch.float32,
             trust_remote_code=True,
         )
         tokenizer = AutoTokenizer.from_pretrained(model_path)
@@ -36,7 +33,7 @@ def initialize_model(model_path: str):
             model=model,
             tokenizer=tokenizer,
             # Explicitly tell the pipeline to use the CPU if no GPU is available
-            device=-1, 
+            device=-1,
         )
         print("Local LLM initialized successfully from local files.")
 
@@ -52,19 +49,18 @@ def generate_response(prompt: str) -> str:
         raise RuntimeError("Model has not been initialized. Call initialize_model() first.")
 
     try:
-        terminators = [
-            llm_pipeline.tokenizer.eos_token_id,
-            llm_pipeline.tokenizer.convert_tokens_to_ids("<|eot_id|>")
-        ]
-
-        # The prompt created by bot.py is correct and is passed here.
+        # ** THE FINAL FIX: We removed the confusing 'terminators' list and
+        # now use only the model's official End-Of-Sentence token. This
+        # prevents the model from generating an empty response. **
         outputs = llm_pipeline(
             prompt,
             max_new_tokens=256,
-            eos_token_id=terminators,
+            eos_token_id=llm_pipeline.tokenizer.eos_token_id,
             do_sample=True,
             temperature=0.7,
             top_p=0.9,
+            top_k=50,                  # Added to prevent numerical instability
+            repetition_penalty=1.1     # Added to improve quality and stability
         )
         
         # This logic correctly extracts the response.

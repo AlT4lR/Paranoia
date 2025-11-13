@@ -1,4 +1,4 @@
-# main.py (Complete Corrected Version)
+# main.py 
 
 import asyncio
 import tkinter as tk
@@ -17,8 +17,6 @@ def resource_path(relative_path):
         base_path = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_path, relative_path)
 
-# (The rest of your main.py file is completely correct and does not need to be changed)
-# The full file is provided below for simplicity.
 from src import config
 from src.database import initialize_db, get_chat_session, load_character_state
 from src.gui import app as gui_app
@@ -74,7 +72,9 @@ async def main():
         try:
             root.update()
         except tk.TclError:
-            running = False; break
+            # This handles the case where the window is destroyed externally
+            running = False
+            break
         await asyncio.sleep(0.01)
 
 async def handle_user_input(user_id: int, gui_updater):
@@ -87,14 +87,13 @@ async def handle_user_input(user_id: int, gui_updater):
     await logic_bot.process_user_message(user_message, user_id=user_id, gui_updater=gui_updater)
 
 def on_closing():
-    global running, root
+    """
+    Signals the main loop to terminate gracefully.
+    We do NOT destroy the window here; we let the main loop exit naturally.
+    """
+    global running
+    print("Window closed by user. Shutting down...")
     running = False
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            loop.call_soon_threadsafe(loop.stop)
-    except: pass
-    if root and root.winfo_exists(): root.destroy()
 
 if __name__ == "__main__":
     root = tk.Tk()
@@ -105,10 +104,16 @@ if __name__ == "__main__":
         root.iconphoto(True, photo_icon)
     except Exception as e:
         print(f"Could not load window icon: {e}")
+    
     root.protocol("WM_DELETE_WINDOW", on_closing)
+    
     try:
         asyncio.run(main())
     except RuntimeError as e:
-        if "Event loop is closed" not in str(e): raise
+        # Ignored specific error if loop is closed during shutdown
+        if "Event loop is closed" not in str(e) and "Event loop stopped" not in str(e):
+            raise
     finally:
-        if root and root.winfo_exists(): root.destroy()
+        # Actual cleanup happens here after the loop has finished
+        if root and root.winfo_exists():
+            root.destroy()
