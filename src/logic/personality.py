@@ -1,20 +1,21 @@
-# src/logic/personality.py
-
 # Import configuration constants
 from src import config
 
-# --- Module-level variables for Personality and Affection State ---
-# These variables hold the character's personality traits and affection level.
-# In a more complex application, this state might be part of a larger
-# character state object or class, and potentially loaded/saved from the database.
-# For now, they are module-level globals matching the original script's flow.
+# --- Module-level variables for Character State ---
+# These global variables hold the character's personality, affection, and relationship status.
 
 # Initialize affection from configuration
 user_affection = config.DEFAULT_AFFECTION
 
 # Initialize personality traits from configuration
-# We make a copy so we can modify the traits without changing the original config data
 personality_traits = config.PERSONALITY_TRAITS.copy()
+
+# Add new relationship metrics
+relationship_status = {
+    "trust": 50,       # (0-100) Does the user seem trustworthy/supportive?
+    "familiarity": 10, # (0-100) How much personal info has been shared?
+    "tension": 0       # (0-100) Is there conflict in the recent conversation?
+}
 
 
 # --- Affection Management ---
@@ -41,13 +42,37 @@ def adjust_affection_based_on_emotion(emotion: str, change_amount: int):
         emotion: The current emotional state of the character.
         change_amount: The base amount to change affection by.
     """
-    # Assuming positive emotions increase affection, negative decrease it
-    if emotion == "Happy" or emotion == "Endearing" or emotion == "Loving":
+    # Positive emotions increase affection, negative decrease it
+    if emotion in ["Happy", "Endearing", "Loving"]:
         adjust_affection(change_amount)
-    elif emotion == "Angry" or emotion == "Disgusted" or emotion == "Fearful": # Fear might decrease affection if it's fear OF the user
+    elif emotion in ["Angry", "Disgusted", "Fearful"]:
         adjust_affection(-change_amount)
-    # Neutral, Surprised, Worried, Obsessed might not change affection by default,
-    # or could have nuanced changes depending on context (which is harder to capture here)
+
+
+# --- Relationship Status Management (New Section) ---
+
+def adjust_relationship_status(metric: str, amount: int):
+    """
+    Adjusts a specific relationship status metric.
+    Clamps the value between 0 and 100.
+
+    Args:
+        metric: The relationship metric to adjust ("trust", "familiarity", "tension").
+        amount: The integer amount to add to the current metric value.
+    """
+    global relationship_status
+    if metric in relationship_status:
+        relationship_status[metric] += amount
+        # Clamp the value between 0 and 100
+        relationship_status[metric] = max(0, min(100, relationship_status[metric]))
+        print(f"Relationship status '{metric}' adjusted by {amount}. New value: {relationship_status[metric]}")
+    else:
+        print(f"Warning: Attempted to adjust unknown relationship metric: {metric}")
+
+def get_relationship_status() -> dict:
+    """Returns a copy of the current relationship status dictionary."""
+    global relationship_status
+    return relationship_status.copy()
 
 
 # --- Personality Trait Analysis and Adjustment ---
@@ -62,17 +87,15 @@ def analyze_conversation_traits(conversation_history: list) -> dict:
 
     Returns:
         A dictionary where keys are trait names and values are floats representing
-        the detected intensity of that trait in the recent history (before adjustment rate).
+        the detected intensity of that trait in the recent history.
     """
-    analysis = {trait: 0.0 for trait in personality_traits}  # Initialize with zeros
+    analysis = {trait: 0.0 for trait in personality_traits}
 
-    # Combine recent history for analysis
-    # Consider the last few lines to focus on recent interaction style
-    recent_history = " ".join(conversation_history[-5:]) # Adjust the number of lines as needed
+    # Analyze the last 5 lines to focus on recent interaction style
+    recent_history = " ".join(conversation_history[-5:])
     recent_history_lower = recent_history.lower()
 
     # --- Keyword-based trait detection ---
-    # Increase the analysis value for a trait if its keywords are present
     if any(word in recent_history_lower for word in ["hope", "bright side", "positive", "wonderful", "amazing", "believe", "confident"]):
         analysis["optimism"] += 0.1
     if any(word in recent_history_lower for word in ["pointless", "meaningless", "waste of time", "doomed", "inevitable", "pathetic", "useless", "sigh", "fatalistic"]):
@@ -85,10 +108,6 @@ def analyze_conversation_traits(conversation_history: list) -> dict:
         analysis["mischievousness"] += 0.1
     if any(word in recent_history_lower for word in ["honor", "respect", "courtesy", "polite", "deference", "esteem", "revere", "sir", "madam"]):
         analysis["respectfulness"] += 0.1
-    # worldliness cues are harder with keywords; might increase based on sheer volume/variety of conversation over time
-    # For now, keep the basic increase from the original script, maybe triggered elsewhere
-    # analysis["worldliness"] += 0.02 # This might be better triggered once per interaction/session
-
     if any(word in recent_history_lower for word in ["hurry", "rush", "wait", "delay", "bother", "late", "annoying", "impatient", "come on"]):
         analysis["impatience"] += 0.1
     if any(word in recent_history_lower for word in ["sympathy", "care", "comfort", "console", "kind", "gentle", "empathy", "poor thing", "there there"]):
@@ -102,8 +121,7 @@ def adjust_personality_traits(analysis_results: dict):
     and accounts for inter-trait influence.
 
     Args:
-        analysis_results: A dictionary of detected trait intensities from
-                          analyze_conversation_traits.
+        analysis_results: A dictionary of detected trait intensities.
     """
     global personality_traits
 
@@ -114,29 +132,26 @@ def adjust_personality_traits(analysis_results: dict):
         personality_traits[trait] = max(0.0, min(1.0, personality_traits[trait]))
 
     # --- Apply Inter-Trait Influence ---
-    # This section implements how traits might affect each other.
-    # The logic from your original script is used here.
-    # Make a copy to calculate influences before applying them simultaneously
     trait_influences = {trait: 0.0 for trait in personality_traits}
 
     for positive_trait in config.POSITIVE_TRAITS:
         for negative_trait in config.NEGATIVE_TRAITS:
             # Negative traits diminish positive traits
             influence_neg_on_pos = (personality_traits[negative_trait] - 0.5) * config.INFLUENCE_FACTOR
-            trait_influences[positive_trait] -= influence_neg_on_pos # Subtract influence
+            trait_influences[positive_trait] -= influence_neg_on_pos
 
             # High positive traits reduce negative traits
             influence_pos_on_neg = (personality_traits[positive_trait] - 0.5) * config.INFLUENCE_FACTOR
-            trait_influences[negative_trait] -= influence_pos_on_neg # Subtract influence
+            trait_influences[negative_trait] -= influence_pos_on_neg
 
         for neutral_trait in config.NEUTRAL_TRAITS:
-             # Positive traits influence neutral traits (positive influence when positive trait is high)
-             influence_pos_on_neut = (personality_traits[positive_trait] - 0.5) * config.INFLUENCE_FACTOR
-             trait_influences[neutral_trait] += influence_pos_on_neut # Add influence
+            # Positive traits influence neutral traits
+            influence_pos_on_neut = (personality_traits[positive_trait] - 0.5) * config.INFLUENCE_FACTOR
+            trait_influences[neutral_trait] += influence_pos_on_neut
 
-             # Negative traits influence neutral traits (negative influence when negative trait is high)
-             influence_neg_on_neut = (personality_traits[negative_trait] - 0.5) * config.INFLUENCE_FACTOR
-             trait_influences[neutral_trait] -= influence_neg_on_neut # Subtract influence
+            # Negative traits influence neutral traits
+            influence_neg_on_neut = (personality_traits[negative_trait] - 0.5) * config.INFLUENCE_FACTOR
+            trait_influences[neutral_trait] -= influence_neg_on_neut
 
 
     # Apply calculated influences simultaneously
@@ -145,11 +160,9 @@ def adjust_personality_traits(analysis_results: dict):
         # Re-clamp after influence application
         personality_traits[trait] = max(0.0, min(1.0, personality_traits[trait]))
 
-    # Worldliness might simply increase over time with more interactions
-    # This could be triggered once per message or per idle response processed
-    personality_traits["worldliness"] += 0.002 # Smaller increment
+    # Worldliness increases over time with interactions
+    personality_traits["worldliness"] += 0.002
     personality_traits["worldliness"] = max(0.0, min(1.0, personality_traits["worldliness"]))
-
 
     print("Personality traits adjusted:", {k: round(v, 3) for k, v in personality_traits.items()})
 
@@ -164,4 +177,4 @@ def get_user_affection() -> int:
 def get_personality_traits() -> dict:
     """Returns a copy of the current personality traits dictionary."""
     global personality_traits
-    return personality_traits.copy() # Return a copy to prevent external modification
+    return personality_traits.copy()
