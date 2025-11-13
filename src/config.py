@@ -9,7 +9,7 @@ HU_TAO_DARK = "#333333"
 # --- General Setup ---
 USER_NAME = "Altair"
 DEFAULT_USER_NAME = "Altair"
-IDLE_TIMEOUT = 180  # seconds before triggering an idle response
+IDLE_TIMEOUT = 180 
 
 # --- Conversation Topics ---
 HU_TAO_TOPICS = [
@@ -66,7 +66,7 @@ HU_TAO_ACTIVITIES = {
 }
 
 # --- Activity Progression ---
-ACTIVITY_DURATION = 60  # seconds (how long an activity takes)
+ACTIVITY_DURATION = 60
 
 # --- Emotion Recognition Setup ---
 EMOTIONS = ["Happy", "Sad", "Angry", "Fearful", "Surprised", "Neutral", "Disgusted", "Worried", "Loving", "Obsessed", "Endearing"]

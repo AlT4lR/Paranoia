@@ -1,5 +1,4 @@
 # src/database.py
-
 import sqlite3
 import asyncio
 import json
@@ -32,7 +31,7 @@ def _initialize_db_sync():
                 PRIMARY KEY (user_id, fact_key)
             )
         """)
-        # ## NEW ##: Table for storing the character's own state
+        # Table for storing the character's own state
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS character_state (
                 user_id INTEGER,
@@ -52,9 +51,9 @@ async def initialize_db():
     """Initializes the database tables asynchronously."""
     await asyncio.to_thread(_initialize_db_sync)
 
-# --- Conversation History Functions ---
+
 async def save_chat_session(user_id: int, chat_id: str, conversation_history: list):
-    # ... (This function remains the same as before)
+
     def _sync(user_id, chat_id, conversation_history):
         conn = _connect_db()
         try:
@@ -68,7 +67,7 @@ async def save_chat_session(user_id: int, chat_id: str, conversation_history: li
     await asyncio.to_thread(_sync, user_id, chat_id, conversation_history)
 
 async def get_chat_session(user_id: int) -> tuple[str | None, list]:
-    # ... (This function remains the same as before)
+
     def _sync(user_id):
         conn = _connect_db()
         try:
@@ -88,7 +87,7 @@ async def get_chat_session(user_id: int) -> tuple[str | None, list]:
 
 # --- User Fact Functions ---
 async def save_fact(user_id: int, fact_key: str, fact_value: str):
-    # ... (This function remains the same as before)
+
     def _sync(user_id, fact_key, fact_value):
         conn = _connect_db()
         try:
@@ -102,7 +101,7 @@ async def save_fact(user_id: int, fact_key: str, fact_value: str):
     await asyncio.to_thread(_sync, user_id, fact_key, fact_value)
 
 async def get_all_facts(user_id: int) -> dict:
-    # ... (This function remains the same as before)
+
     def _sync(user_id):
         conn = _connect_db()
         facts = {}
@@ -116,7 +115,7 @@ async def get_all_facts(user_id: int) -> dict:
             conn.close()
     return await asyncio.to_thread(_sync, user_id)
 
-# --- ## NEW ##: Character State Functions ---
+# Character State Functions ---
 async def save_character_state(user_id: int, state_data: dict):
     """Asynchronously saves key-value pairs of the character's state."""
     def _sync(user_id, state_data):
