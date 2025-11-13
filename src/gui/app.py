@@ -1,4 +1,4 @@
-# src/gui/app.py (Complete Corrected Version)
+# src/gui/app.py (Corrected Version)
 
 import tkinter as tk
 from tkinter import messagebox
@@ -59,13 +59,12 @@ def setup_gui(master: tk.Tk, image_path: str):
     version_label = tk.Label(name_label_frame, text=f"by Altair, Version {__version__}", font=("Arial", 10), bg=config.HU_TAO_DARK, fg=config.HU_TAO_WHITE)
     version_label.pack(side=tk.TOP, anchor=tk.W)
 
-    initial_emotion_desc = logic_emotion.get_emotion_description()
-    try:
-        dominant_emotion = initial_emotion_desc.split(" ")[2].replace('(', '').replace(')', '')
-        initial_color = config.EMOTION_COLORS.get(dominant_emotion, config.HU_TAO_WHITE)
-    except:
-        initial_color = config.HU_TAO_WHITE
-    emotion_label = tk.Label(info_frame, text=f"{initial_emotion_desc}", font=("Arial", 12), bg=config.HU_TAO_DARK, fg=initial_color)
+    # CORRECTED: Get the simple dominant emotion for the initial display.
+    initial_dominant_emotion = logic_emotion.get_dominant_emotion()
+    # CORRECTED: The color lookup is now simpler and more reliable.
+    initial_color = config.EMOTION_COLORS.get(initial_dominant_emotion, config.HU_TAO_WHITE)
+    
+    emotion_label = tk.Label(info_frame, text=f"{initial_dominant_emotion}", font=("Arial", 12), bg=config.HU_TAO_DARK, fg=initial_color)
     emotion_label.pack(side=tk.RIGHT, padx=10, pady=10)
 
     chat_log = tk.Text(chat_frame, bg=config.HU_TAO_DARK, fg=config.HU_TAO_WHITE, wrap=tk.WORD, state=tk.DISABLED, font=("Courier New", 11))
@@ -92,15 +91,13 @@ def display_conversation(conversation_history: list[str], user_name: str, defaul
         chat_log.config(state=tk.DISABLED)
         chat_log.see(tk.END)
 
-def update_emotion_label(emotion_description: str):
+def update_emotion_label(dominant_emotion: str):
+    """ Updates the emotion label with a simple string like 'Happy' or 'Sad'. """
     global emotion_label
     if emotion_label:
-        try:
-            dominant_emotion = emotion_description.split(" ")[2].replace('(', '').replace(')', '')
-            color = config.EMOTION_COLORS.get(dominant_emotion, config.HU_TAO_WHITE)
-        except:
-            color = config.HU_TAO_WHITE
-        emotion_label.config(text=f"{emotion_description}", fg=color)
+        # CORRECTED: Logic is now simplified. It receives the dominant emotion directly.
+        color = config.EMOTION_COLORS.get(dominant_emotion, config.HU_TAO_WHITE)
+        emotion_label.config(text=f"{dominant_emotion}", fg=color)
 
 def get_message_entry_text() -> str:
     return message_entry.get().strip() if message_entry else ""
