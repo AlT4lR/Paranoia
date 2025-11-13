@@ -1,191 +1,190 @@
-# src/logic/bot.py
-
 import asyncio
 import random
-import datetime
+import json
 
-# Import modules from your src package
 from src import config
-from src.database import get_chat_session, save_chat_session # Need DB interaction
-# Need to import the API functions from the character_ai package
-from src.character_ai import api as cai_api
-# Need logic modules for state management
+from src.database import get_chat_session, save_chat_session, save_fact, get_all_facts
+from src.local_llm import engine as llm_engine
 from src.logic import emotion as logic_emotion
 from src.logic import personality as logic_personality
-from src.logic import activity as logic_activity # For potential activity interruption
+from src.logic import activity as logic_activity
 
-# --- Bot Processing Function ---
+# --- Background Processing ---
 
-async def process_user_message(user_message: str, user_id: int, client, gui_updater):
+async def _extract_and_save_facts(user_id: int, user_message: str):
     """
-    Processes a user's message, interacts with the CharacterAI API,
-    updates character state, saves the session, and updates the GUI.
-
-    Args:
-        user_message: The message received from the user.
-        user_id: The ID of the user sending the message.
-        client: The initialized CharacterAI client instance.
-        gui_updater: An object or module containing GUI update functions
-                     (e.g., src.gui.app). Needs methods like update_chat_log,
-                     display_conversation, update_emotion_label.
+    Background task to analyze the user message, extract facts, and save them to the database.
     """
+    print("Background task started: Analyzing user message for facts...")
+    try:
+        extraction_prompt = (
+            "<|system|>\n"
+            "You are a fact-extraction assistant. Your goal is to identify one or two key pieces of personal information "
+            "about the user from their last message and format them into a JSON object. "
+            "Only extract factual, static information (e.g., 'favorite color', 'job', 'pet's name'). "
+            "If no facts are present, return an empty JSON object: {}.\n"
+            "Format: {\"fact_key\": \"fact_value\"}\n"
+            "Example: {\"Favorite game\": \"Genshin Impact\"}\n"
+            "<|end|>\n"
+            f"<|user|>\n{user_message}<|end|>\n"
+            "<|assistant|>\n"
+        )
+        
+        # Call LLM in a thread to avoid blocking the asyncio loop
+        json_str_response = await asyncio.to_thread(llm_engine.generate_response, extraction_prompt)
+        
+        # Clean up the response to isolate the JSON string
+        if "```json" in json_str_response:
+            json_str_response = json_str_response.split("```json\n")[1].split("\n```")[0].strip()
+        
+        facts = json.loads(json_str_response)
+        
+        if not facts: 
+            return
+            
+        for key, value in facts.items():
+            if isinstance(key, str) and isinstance(value, str):
+                await save_fact(user_id, key.strip(), value.strip())
+                
+    except (json.JSONDecodeError, IndexError):
+        print("Fact extraction failed: LLM did not return valid JSON.")
+    except Exception as e:
+        print(f"An error occurred during fact extraction: {e}")
+
+# --- Prompt Generation ---
+
+async def _create_prompt(user_id: int, conversation_history: list, user_message: str = None) -> str:
+    """
+    Constructs the full prompt for the LLM, including persona, state, and history.
+    """
+    
+    # Get current character state metrics
+    activity_status = logic_activity.get_activity_status()
+    user_affection = logic_personality.get_user_affection()
+    current_emotion = logic_emotion.get_current_emotion()
+    relationship_status = logic_personality.get_relationship_status() # NEW: Get relationship metrics
+    
+    # Compile known facts section
+    known_facts = await get_all_facts(user_id)
+    facts_prompt_section = "Here are some facts you remember about the user:\n" if known_facts else "You do not remember any specific facts about the user yet.\n"
+    for key, value in known_facts.items(): 
+        facts_prompt_section += f"- {key}: {value}\n"
+        
+    # Construct the system prompt
+    system_prompt = (
+        "<|system|>\n"
+        "You are Hu Tao, the 77th Director of the Wangsheng Funeral Parlor. Your personality is Mischievous, Playful, and Cynical, "
+        "but you are also Worldly and have a deep sense of Compassion and Seriousness when appropriate. "
+        "You should speak like a sharp-witted, slightly teasing, but ultimately kind entrepreneur from Liyue. "
+        "You frequently make references to death, ghosts, and funeral services in a lighthearted, eccentric manner.\n\n"
+        
+        f"Your current emotional state is: {current_emotion}.\n"
+        f"Your current affection level is: {user_affection}/100.\n"
+        
+        # NEW: Inject relationship status into the prompt
+        "Your current relationship with the user:\n"
+        f"- Trust Level: {relationship_status['trust']}/100\n"
+        f"- Familiarity: {relationship_status['familiarity']}/100\n"
+        f"- Recent Tension: {relationship_status['tension']}/100\n\n"
+        
+        f"You are currently: {activity_status}.\n\n"
+        f"{facts_prompt_section}\n"
+        
+        "Respond to the user as Hu Tao, keeping your personality and current state in mind. "
+        "Your response should be concise and directly relevant to the current conversation or activity. "
+        "Do not use markdown formatting (like bolding or lists) in your response, just plain text."
+        "<|end|>\n"
+    )
+    
+    # Construct history prompt (last 6 turns)
+    history_prompt = ""
+    for line in conversation_history[-6:]:
+        if line.startswith(f"{config.DEFAULT_USER_NAME}:"): 
+            history_prompt += f"<|user|>\n{line.replace(f'{config.DEFAULT_USER_NAME}: ', '')}<|end|>\n"
+        elif line.startswith("Hu Tao:"): 
+            history_prompt += f"<|assistant|>\n{line.replace('Hu Tao: ', '')}<|end|>\n"
+            
+    # Construct user message prompt
+    user_prompt = f"<|user|>\n{user_message}<|end|>\n" if user_message else ""
+    
+    return system_prompt + history_prompt + user_prompt + "<|assistant|>\n"
+
+# --- Main Message Processor ---
+
+async def process_user_message(user_message: str, user_id: int, gui_updater):
+    """Processes a user's message using the local LLM and updates the character state."""
     print(f"Processing message from user {user_id}: {user_message}")
 
     try:
-        # 1. Get current chat session
-        chat_id, conversation_history = await get_chat_session(user_id)
-        print(f"Loaded session: chat_id={chat_id}, history_length={len(conversation_history)}")
+        # Interrupt the current activity when the user sends a message.
+        activity_before_interruption = logic_activity.current_activity
+        await logic_activity.interrupt_activity()
 
-        # If no session exists, this is the first message.
-        # The initial welcome message was shown by main.py/app.py.
-        # The CAI chat session will be created in cai_api.send_message if chat_id is None.
+        # Start fact extraction in the background
+        asyncio.create_task(_extract_and_save_facts(user_id, user_message))
 
+        _, conversation_history = await get_chat_session(user_id)
 
-        # 2. Simulate activity interruption
-        # Only show interruption if an activity is actually set
-        if random.random() < 0.2 and logic_activity.current_activity is not None:
-            # Use the stored activity name directly
-            interruption_message = f"Oh, excuse me! I was in the middle of {logic_activity.current_activity} when your message came through!"
+        # Randomly respond to the interruption to make it feel more natural
+        if random.random() < 0.3 and activity_before_interruption and "Responding" not in activity_before_interruption:
+            interruption_message = f"Oh, one moment! I was just in the middle of {activity_before_interruption}."
             gui_updater.update_chat_log(f"Hu Tao: {interruption_message}", sender="hutao")
-            # Adding a small visual delay might be good, but await asyncio.sleep() inside GUI handler is tricky
-            # gui_updater might need an async update method, or main loop handles updates based on state changes.
-            # For now, just display the message. The actual AI response follows.
+            await asyncio.sleep(0.5)
 
-
-        # 3. Analyze conversation for personality traits *before* generating response
-        # This helps the bot's response be influenced by recent interactions
-        # Use DEFAULT_USER_NAME for history representation passed to personality analysis
+        # State updates (before generating response for context)
+        # Include the new user message in the analysis
         trait_analysis = logic_personality.analyze_conversation_traits(conversation_history + [f"{config.DEFAULT_USER_NAME}: {user_message}"])
-        logic_personality.adjust_personality_traits(trait_analysis) # Adjust traits based on analysis
-
-
-        # 4. Generate response from CharacterAI API
-        # The cai_api module handles the actual API call and chat session creation if needed
-        print("Calling CharacterAI API...")
-        # --- CORRECTED API CALL ARGUMENTS ---
-        # Ensure arguments match the signature of cai_api.send_message
-        api_response_text, new_chat_id = await cai_api.send_message(
-            client=client,
-            char_id=config.CHAR_ID,
-            user_id=user_id,
-            chat_id=chat_id, # Correct positional/keyword argument
-            user_message=user_message,
-            conversation_history=conversation_history, # Correct positional/keyword argument
-            user_name=config.USER_NAME, # Passed as keyword, used in prompt
-            default_user_name=config.DEFAULT_USER_NAME, # Passed as keyword, used in prompt context
-            user_affection=logic_personality.get_user_affection(), # Get current affection
-            activity_status=logic_activity.get_activity_status(), # Get current activity status
-            # Note: Sending personality traits in the prompt can influence the AI,
-            # but might make the prompt very long. The original code removed this.
-            # If you want to include them, pass logic_personality.get_personality_traits()
-        )
-        print(f"Received API response. New chat_id: {new_chat_id}")
-
-        # Update chat_id if a new session was created by the API call
-        if chat_id is None and new_chat_id is not None:
-            chat_id = new_chat_id
-
-
-        # 5. Analyze the API response for emotion and update state
-        print("Analyzing emotion from response...")
+        logic_personality.adjust_personality_traits(trait_analysis)
+        
+        # Generate the response
+        prompt = await _create_prompt(user_id, conversation_history, user_message)
+        api_response_text = await asyncio.to_thread(llm_engine.generate_response, prompt)
+        
+        # Post-response state updates
         response_emotion = logic_emotion.analyze_emotion(api_response_text)
-        logic_emotion.set_current_emotion(response_emotion) # Update the module-level state
-        gui_updater.update_emotion_label(logic_emotion.get_current_emotion()) # Update GUI
-
-        # 6. Adjust affection based on the response emotion
+        logic_emotion.set_current_emotion(response_emotion)
         logic_personality.adjust_affection_based_on_emotion(response_emotion, config.AFFECTION_CHANGE_AMOUNT)
-        print(f"Affection adjusted based on emotion. New affection: {logic_personality.get_user_affection()}")
-
-
-        # 7. Update conversation history with the API response and save
-        print("Updating history and saving session...")
-        # Use DEFAULT_USER_NAME for the user message in history storage for consistency
-        updated_history = conversation_history + [f"{config.DEFAULT_USER_NAME}: {user_message}", f"Hu Tao: {api_response_text}"]
-        await save_chat_session(user_id, chat_id, updated_history)
-        print("Session saved.")
-
-        # 8. Update GUI with the Hu Tao response
+        
+        # Update GUI and save history
+        gui_updater.update_emotion_label(logic_emotion.get_current_emotion())
         gui_updater.update_chat_log(f"Hu Tao: {api_response_text}", sender="hutao")
-        # Re-displaying the whole conversation might be necessary if history state is complex,
-        # but update_chat_log is usually sufficient for just adding the last message.
-        # gui_updater.display_conversation(updated_history, config.USER_NAME, config.DEFAULT_USER_NAME)
-
-
+        
+        updated_history = conversation_history + [f"{config.DEFAULT_USER_NAME}: {user_message}", f"Hu Tao: {api_response_text}"]
+        await save_chat_session(user_id, "local_chat", updated_history)
+        
     except Exception as e:
         print(f"Error processing message: {e}")
-        # Display an error message in the chat log
         gui_updater.update_chat_log(f"Error: {e}", sender="hutao")
-        # Potentially show a messagebox for critical errors
-        # gui_updater.show_error_message("Bot Error", f"An error occurred while processing your message: {e}")
 
+# --- Idle Response Generator ---
 
-# --- Function for Handling Idle Responses ---
-# This logic was in main.py in the original script's idle loop.
-# It's better to place the *generation* logic here, called by main.py's loop.
+async def generate_idle_response(user_id: int, gui_updater):
+    """Generates an idle response from the local LLM if the character is left alone."""
+    
+    # If the bot is idle, it should choose a new activity for itself.
+    if "Responding" in logic_activity.current_activity or logic_activity.current_activity is None:
+        await logic_activity.choose_activity(logic_emotion.get_current_emotion())
 
-async def generate_idle_response(user_id: int, client, gui_updater):
-    """
-    Generates and processes an idle response from the CharacterAI API.
-
-    Args:
-        user_id: The ID of the user.
-        client: The initialized CharacterAI client instance.
-        gui_updater: An object or module containing GUI update functions.
-    """
     print(f"Generating idle response for user {user_id}")
     try:
-        chat_id, conversation_history = await get_chat_session(user_id)
+        _, conversation_history = await get_chat_session(user_id)
+        
+        # Generate the response
+        prompt = await _create_prompt(user_id, conversation_history)
+        idle_message_text = await asyncio.to_thread(llm_engine.generate_response, prompt)
 
-        # Get relevant state for the prompt
-        activity_status = logic_activity.get_activity_status()
-        user_affection = logic_personality.get_user_affection()
-
-        # Generate the idle response using the API module
-        # The arguments here already match the signature of cai_api.generate_idle_message
-        idle_message_text, new_chat_id = await cai_api.generate_idle_message(
-            client,
-            config.CHAR_ID,
-            user_id, # Pass user_id for session handling in API module
-            chat_id, # Pass current chat_id (can be None)
-            conversation_history, # Pass history for context
-            user_name=config.USER_NAME, # Used in prompt
-            activity_status=activity_status,
-            user_affection=user_affection,
-            hu_tao_topics=config.HU_TAO_TOPICS # Pass topics for suggestion
-        )
-
-        # Update chat_id if a new session was created
-        if chat_id is None and new_chat_id is not None:
-             chat_id = new_chat_id
-
-        # Analyze emotion from the idle response
+        # Post-response state updates
         idle_emotion = logic_emotion.analyze_emotion(idle_message_text)
-        logic_emotion.set_current_emotion(idle_emotion) # Update state
-        gui_updater.update_emotion_label(logic_emotion.get_current_emotion()) # Update GUI
-
-        # Adjust affection based on idle response emotion
+        logic_emotion.set_current_emotion(idle_emotion)
         logic_personality.adjust_affection_based_on_emotion(idle_emotion, config.AFFECTION_CHANGE_AMOUNT)
-        print(f"Affection adjusted based on idle response. New affection: {logic_personality.get_user_affection()}")
-
-
-        # Update history and save
-        updated_history = conversation_history + [f"Hu Tao: {idle_message_text}"]
-        await save_chat_session(user_id, chat_id, updated_history)
-        print("Idle session saved.")
-
-        # Update GUI with the idle response
+        
+        # Update GUI and save history
+        gui_updater.update_emotion_label(logic_emotion.get_current_emotion())
         gui_updater.update_chat_log(f"Hu Tao: {idle_message_text}", sender="hutao")
-        # gui_updater.display_conversation(updated_history, config.USER_NAME, config.DEFAULT_USER_NAME)
-
-
+        
+        updated_history = conversation_history + [f"Hu Tao: {idle_message_text}"]
+        await save_chat_session(user_id, "local_chat", updated_history)
+        
     except Exception as e:
         print(f"Error generating idle response: {e}")
-        # Display an error message in the chat log
         gui_updater.update_chat_log(f"Error generating idle response: {e}", sender="hutao")
-        # Potentially show a messagebox for critical errors
-        # gui_updater.show_error_message("Bot Error", f"An error occurred during idle response: {e}")
-
-
-# --- Functions for managing character state if needed ---
-# You might add functions here or keep them in their respective modules.
-# For now, let's call into the separate modules.

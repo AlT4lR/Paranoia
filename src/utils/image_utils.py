@@ -2,10 +2,6 @@
 
 from PIL import Image, ImageTk, ImageDraw # Import necessary PIL modules
 
-# No need to import config here unless a function uses a config value directly without it being passed in.
-# The create_circular_image function takes the path as an argument, which comes from config in gui.app.
-
-
 def create_circular_image(image_path: str, size: tuple[int, int]) -> Image.Image:
     """
     Opens an image, resizes it, and applies a circular mask.
