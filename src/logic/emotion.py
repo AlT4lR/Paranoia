@@ -1,93 +1,83 @@
-# src/logic/emotion.py
+# src/logic/emotion.py (Corrected Version)
 
-from textblob import TextBlob  # For sentiment analysis
+from textblob import TextBlob
 
-# Import configuration constants
-from src import config
+# Module-level variable holding the current emotion state.
+current_emotion_vector = {
+    "Happy": 0.2, 
+    "Sad": 0.1, 
+    "Playful": 0.4, 
+    "Serious": 0.3,
+    "Angry": 0.0,
+    "Loving": 0.1,
+    "Endearing": 0.1
+}
 
-# --- Module-level variable for Emotion State ---
-# This variable holds the character's current emotional state.
-# It is initialized to the default.
-current_emotion = "Neutral" # Initialize with a default emotion
-
-
-def analyze_emotion(text: str) -> str:
+def _analyze_emotion_vector(text: str) -> dict:
     """
-    Analyzes the emotional tone of the input text using keyword matching
-    and TextBlob sentiment analysis.
-
-    Args:
-        text: The input string to analyze.
-
-    Returns:
-        A string representing the detected emotion (e.g., "Happy", "Sad", "Neutral").
+    Analyzes text and returns a dictionary of emotional scores.
+    (Internal helper function)
     """
-    text_lower = text.lower()  # Convert to lowercase once for efficiency
+    analysis = TextBlob(text)
+    polarity = analysis.sentiment.polarity  # -1 (neg) to 1 (pos)
+    subjectivity = analysis.sentiment.subjectivity # 0 (objective) to 1 (subjective)
 
-    # --- Keyword-based detection (More direct control) ---
-    # This prioritizes specific words that strongly indicate an emotion
-    if any(word in text_lower for word in ["happy", "joyful", "delighted", "excited", "cheerful", "yay", "hehe"]):
-        return "Happy"
-    elif any(word in text_lower for word in ["sad", "depressed", "unhappy", "grief", "mourning", "tear", "sob"]):
-        return "Sad"
-    elif any(word in text_lower for word in ["angry", "furious", "irate", "annoyed", "grr", "hmpf", "tsk"]):
-        return "Angry"
-    elif any(word in text_lower for word in ["fearful", "scared", "afraid", "terrified", "spooked", "eek", "gulp"]):
-        return "Fearful"
-    elif any(word in text_lower for word in ["surprised", "amazed", "astonished", "shocked", "wow", "oh my"]):
-        return "Surprised"
-    elif any(word in text_lower for word in ["disgusted", "repulsed", "sickened", "nauseated", "eww", "ugh", "gross"]):
-        return "Disgusted"
-    elif any(word in text_lower for word in ["worried", "anxious", "concerned", "apprehensive", "nervous", "fret"]):
-        return "Worried"
-    elif any(word in text_lower for word in ["loving", "affectionate", "caring", "romantic", "love", "dear", "sweetheart", "honey"]):
-        return "Loving"
-    # Note: "Obsessed" and "Endearing" might need careful handling depending on context
-    elif any(word in text_lower for word in ["obsessed", "fixated", "infatuated", "stalking", "can't stop thinking"]):
-         return "Obsessed" # Potentially risky, handle with care
-    elif any(word in text_lower for word in ["darling", "sweetheart", "dearest", "honey", "cutie", "my dear"]):
-        return "Endearing"
-    elif any(word in text_lower for word in ["neutral", "okay", "alright", "fine"]):
-         return "Neutral" # Explicit neutral keywords
+    vector = {
+        "Happy": max(0, polarity * subjectivity),
+        "Sad": max(0, -polarity),
+        "Playful": subjectivity * 0.8,
+        "Serious": (1 - subjectivity) * 0.8,
+        "Angry": max(0, -polarity * (1 - subjectivity)), # Anger is often negative and objective
+        "Loving": max(0, polarity * 0.5),
+        "Endearing": max(0, polarity * 0.7)
+    }
+    
+    # Normalize to prevent runaway values
+    total = sum(vector.values())
+    if total > 0:
+        for key in vector:
+            vector[key] /= total
+            
+    return vector
 
+def _update_current_emotion_vector(new_vector: dict):
+    """
+    Updates the current emotion state by blending with the new one for emotional inertia.
+    (Internal helper function)
+    """
+    global current_emotion_vector
+    for key, value in new_vector.items():
+        # Blend the new emotion with the old one
+        current_emotion_vector[key] = (current_emotion_vector.get(key, 0) * 0.7) + (value * 0.3)
 
-    # --- Fallback to TextBlob Sentiment (if no strong keywords matched) ---
-    # This provides a general positive/negative/neutral baseline
-    try:
-        analysis = TextBlob(text)
-        polarity = analysis.sentiment.polarity # -1.0 (negative) to 1.0 (positive)
-        # subjectivity = analysis.sentiment.subjectivity # 0.0 (objective) to 1.0 (subjective)
+# --- Public API Functions ---
 
-        if polarity > 0.4: # Threshold for positive sentiment
-            return "Happy" # Or perhaps a less intense positive like "Content" if you had it
-        elif polarity < -0.4: # Threshold for negative sentiment
-            return "Sad" # Or perhaps "Unhappy" or "Irritated" depending on intensity needed
-        # Add checks for more specific negative emotions if needed based on polarity range
+def analyze_and_update_emotion_from_text(text: str):
+    """
+    Analyzes a piece of text and updates the character's internal emotional state.
+    This is the main function for processing emotion from new text.
+    """
+    new_vector = _analyze_emotion_vector(text)
+    _update_current_emotion_vector(new_vector)
 
-        # If polarity is close to 0, consider it Neutral
+def get_emotion_description_for_prompt() -> str:
+    """
+    Returns a detailed text description of the current emotional state for the LLM's system prompt.
+    """
+    global current_emotion_vector
+    # Find the two most dominant emotions
+    sorted_emotions = sorted(current_emotion_vector.items(), key=lambda item: item[1], reverse=True)
+    # Describe the state in a way the LLM can understand
+    return f"a mix of {sorted_emotions[0][0]} ({sorted_emotions[0][1]:.0%}) and {sorted_emotions[1][0]} ({sorted_emotions[1][1]:.0%})"
+
+def get_dominant_emotion() -> str:
+    """
+    Returns the single most dominant emotion as a capitalized string (e.g., "Playful").
+    This is used for the GUI display and for simplified logic checks.
+    """
+    global current_emotion_vector
+    if not current_emotion_vector:
         return "Neutral"
-
-    except Exception as e:
-        print(f"Error during TextBlob analysis: {e}")
-        return "Neutral" # Default to Neutral on error
-
-
-# --- Functions to Get and Set Emotion State ---
-
-def get_current_emotion() -> str:
-    """Returns the character's current emotional state."""
-    global current_emotion
-    return current_emotion
-
-def set_current_emotion(emotion: str):
-    """
-    Sets the character's current emotional state.
-    Validates the input emotion against the defined list (optional but good practice).
-    """
-    global current_emotion
-    # Optional: Add validation to ensure the emotion is in the EMOTIONS list
-    # if emotion in config.EMOTIONS:
-    current_emotion = emotion
-    # else:
-    #     print(f"Warning: Attempted to set invalid emotion: {emotion}")
-    #     current_emotion = "Neutral" # Default to neutral if invalid
+    # Find the emotion with the highest score
+    dominant_emotion = max(current_emotion_vector, key=current_emotion_vector.get)
+    return dominant_emotion
