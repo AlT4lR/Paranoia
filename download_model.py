@@ -1,15 +1,12 @@
-# download_model.py (v2 - Robust Version)
-
+# download_model.py
 import os
 from huggingface_hub import snapshot_download, HfFolder
 from huggingface_hub.utils import HfHubHTTPError
 
 # --- Configuration ---
-# The model repository ID on Hugging Face
+
 MODEL_ID = "microsoft/Phi-3-mini-4k-instruct"
 
-# The local directory where we will save the model
-# This creates the 'local_model' folder in the same directory as the script
 LOCAL_MODEL_DIR = os.path.join(os.path.dirname(__file__), "local_model")
 
 # --- Main Download Logic ---
@@ -25,16 +22,13 @@ def download_model_robustly():
     print("Please be patient and do not interrupt the script.")
 
     try:
-        # snapshot_download is the official, recommended way to download a full model repo.
-        # It handles large files, shows progress bars, and is resumable.
+
         snapshot_download(
             repo_id=MODEL_ID,
             local_dir=LOCAL_MODEL_DIR,
-            local_dir_use_symlinks=False,  # Set to False to copy files directly
-            resume_download=True,        # If interrupted, it will try to resume
+            local_dir_use_symlinks=False,  
+            resume_download=True,       
             
-            # We can ignore files we don't need for inference to save space.
-            # The .md and other non-essential files will be skipped.
             ignore_patterns=[
                 "*.md",
                 ".gitattributes",
