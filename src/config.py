@@ -1,17 +1,15 @@
+# src/config.py
+
 # --- Hu Tao Color Scheme ---
 HU_TAO_RED = "#FF4500"
 HU_TAO_MESSAGE = "#FFB347"
 HU_TAO_WHITE = "#FFFAFA"
 HU_TAO_DARK = "#333333"
 
-# --- CharacterAI Setup ---
-# IMPORTANT: Replace 'YOUR_CHARACTER_AI_KEY' with your actual key
-CAI_API_KEY = 'U3dJdreV9rrvUiAnILMauI-oNH838a8E_kEYfOFPalE' # Your CharacterAI API Key
-USER_NAME = "Altair"  # User's name in the conversation
-DEFAULT_USER_NAME = "Altair"  # Default display name for the user
+# --- General Setup ---
+USER_NAME = "Altair"
+DEFAULT_USER_NAME = "Altair"
 IDLE_TIMEOUT = 180  # seconds before triggering an idle response
-# IMPORTANT: Replace 'YOUR_CHARACTER_ID' with the ID of your Hu Tao character
-CHAR_ID = "kBjZiwTQ"  # Hutao Character ID
 
 # --- Conversation Topics ---
 HU_TAO_TOPICS = [
@@ -71,62 +69,53 @@ HU_TAO_ACTIVITIES = {
 ACTIVITY_DURATION = 60  # seconds (how long an activity takes)
 
 # --- Emotion Recognition Setup ---
-EMOTIONS = ["Happy", "Sad", "Angry", "Fearful", "Surprised", "Neutral", "Disgusted", "Worried", "Loving", "Obsessed", "Endearing"] # Extended List
+EMOTIONS = ["Happy", "Sad", "Angry", "Fearful", "Surprised", "Neutral", "Disgusted", "Worried", "Loving", "Obsessed", "Endearing"]
 EMOTION_COLORS = {
-    "Happy": "#FFD700",     # Gold
-    "Sad": "#87CEEB",       # Sky Blue
-    "Angry": "#FF4500",     # Orange Red
-    "Fearful": "#90EE90",   # Light Green
-    "Surprised": "#DDA0DD",  # Plum
-    "Neutral": "#FFFFFF",   # White
-    "Disgusted": "#8B4513",  # Saddle Brown
-    "Worried": "#A9A9A9",   # Dark Gray
-    "Loving": "#FF69B4",    # Hot Pink
-    "Obsessed": "#800080",  # Purple
-    "Endearing": "#FFA07A",   # Light Salmon
+    "Happy": "#FFD700",
+    "Sad": "#87CEEB",
+    "Angry": "#FF4500",
+    "Fearful": "#90EE90",
+    "Surprised": "#DDA0DD",
+    "Neutral": "#FFFFFF",
+    "Disgusted": "#8B4513",
+    "Worried": "#A9A9A9",
+    "Loving": "#FF69B4",
+    "Obsessed": "#800080",
+    "Endearing": "#FFA07A",
 }
 
 # --- Affection System ---
 DEFAULT_AFFECTION = 50
 MAX_AFFECTION = 100
 MIN_AFFECTION = 0
-AFFECTION_CHANGE_AMOUNT = 5  # Adjust the amount of affection change per interaction
+AFFECTION_CHANGE_AMOUNT = 5
 
 # --- Personality Traits ---
 PERSONALITY_TRAITS = {
-    "optimism": 0.5,    # Positive (0.0 to 1.0)
-    "cynicism": 0.2,    # Negative
-    "playfulness": 0.8,   # Positive
-    "seriousness": 0.3,  # Neutral/Situational
-    "mischievousness": 0.7, # Neutral/Can be + or -
-    "respectfulness": 0.6,  # Positive
-    "worldliness": 0.4,    # Neutral/Maturity
-    "impatience": 0.2,    # Negative
-    "compassion": 0.7      # Positive
+    "optimism": 0.5,
+    "cynicism": 0.2,
+    "playfulness": 0.8,
+    "seriousness": 0.3,
+    "mischievousness": 0.7,
+    "respectfulness": 0.6,
+    "worldliness": 0.4,
+    "impatience": 0.2,
+    "compassion": 0.7
 }
-
-TRAIT_ADJUSTMENT_RATE = 0.01  # How much traits can change per conversation
+TRAIT_ADJUSTMENT_RATE = 0.01
 POSITIVE_TRAITS = ["optimism", "playfulness", "respectfulness", "compassion"]
 NEGATIVE_TRAITS = ["cynicism", "impatience"]
-NEUTRAL_TRAITS = ["seriousness", "mischievousness", "worldliness"] #Traits that can either positively or negatively
-INFLUENCE_FACTOR = 0.005 # Rate that personality effect other aspects
+NEUTRAL_TRAITS = ["seriousness", "mischievousness", "worldliness"]
+INFLUENCE_FACTOR = 0.005
 
 # --- Database Configuration ---
-DATABASE_NAME = "chat_sessions.db" # Name for your SQLite database file
+DATABASE_NAME = "chat_sessions.db"
 
 # --- Asset Paths ---
-# Use os.path.join and potentially relative paths if assets are inside src
-# from src import __file__ as src_path
-# BASE_DIR = os.path.dirname(os.path.abspath(src_path))
-# ASSETS_DIR = os.path.join(BASE_DIR, 'assets')
-# HUTAO_IMAGE_PATH = os.path.join(ASSETS_DIR, 'hutao.jpg')
-
-# Or, if assets are at the root level:
 import os
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) # Go up two levels from config.py
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS_DIR = os.path.join(BASE_DIR, 'assets')
 HUTAO_IMAGE_PATH = os.path.join(ASSETS_DIR, 'hutao.jpg')
-
 
 # --- Other Settings ---
 WINDOW_WIDTH = 800
