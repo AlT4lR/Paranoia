@@ -1,4 +1,4 @@
-# Project Paranoia: The Soul of Director Hu Tao
+# Project Paranoia
 
 ### *A Digital Companion Project by Altair*
 
