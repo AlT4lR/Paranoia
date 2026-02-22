@@ -1,0 +1,17 @@
+{
+    "nouns": {
+        "coffin": {"spooky": 0.9, "professional": 0.7},
+        "tea": {"casual": 0.8, "professional": 0.4},
+        "butterfly": {"mystical": 1.0, "playful": 0.6}
+    },
+    "verbs": {
+        "bury": {"spooky": 0.8, "mischievous": 0.5},
+        "prank": {"mischievous": 1.0, "playful": 0.8},
+        "calculate": {"professional": 0.9, "serious": 0.7}
+    },
+    "fillers": {
+        "Aiya!": {"mischievous": 0.8, "playful": 0.9},
+        "Hee-hee~": {"mischievous": 1.0, "playful": 0.7},
+        "Hmm...": {"serious": 0.6, "worldliness": 0.8}
+    }
+}
