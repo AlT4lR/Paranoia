@@ -3,7 +3,13 @@ import os
 from difflib import SequenceMatcher
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.svm import LinearSVC
-from src import config
+# Assuming config is in your src directory
+try:
+    from src import config
+except ImportError:
+    # Fallback for testing if config isn't found
+    class config:
+        BRAIN_MODEL_PATH = "models/intent_brain.pkl"
 
 class IntentBrain:
     def __init__(self, soul=None):
@@ -27,7 +33,7 @@ class IntentBrain:
 
     def absorb_style(self, text):
         """Analyzes text to see if it matches Hu Tao's voice and updates traits."""
-        if not self.soul:
+        if not self.soul or not hasattr(self.soul, 'memory'):
             return
 
         text_lower = text.lower()
@@ -49,18 +55,17 @@ class IntentBrain:
             traits["professionalism"] = min(1.0, traits["professionalism"] + 0.1)
             traits["mischief"] = max(0.0, traits["mischief"] - 0.1)
 
-        # Save the updated traits back to the soul's memory
+        # Save back to soul
         self.soul.memory["traits"] = traits
-        self.soul._save()
+        if hasattr(self.soul, '_save'):
+            self.soul._save()
 
     def predict(self, text):
         """Predicts intent and learns style simultaneously."""
-        # Run style analysis first
         self.absorb_style(text)
-        
         text_lower = text.lower().strip()
         
-        # 1. Passive Learning / Similarity check
+        # 1. Similarity check (Exact/Close match)
         best_match_intent = None
         highest_score = 0
         for known_text, intent in self.data:
@@ -69,7 +74,10 @@ class IntentBrain:
                 highest_score = score
                 best_match_intent = intent
         
-        if 0.80 <= highest_score < 1.0:
+        if highest_score >= 0.95: # Exact-ish match
+            return best_match_intent
+        
+        if 0.80 <= highest_score < 0.95:
             self.teach(text_lower, best_match_intent)
             return best_match_intent
         
@@ -81,11 +89,14 @@ class IntentBrain:
             return "unknown"
 
     def train(self):
-        """Trains the ML model and saves it to a file."""
+        """Trains the ML model and saves it."""
         try:
             texts, labels = zip(*self.data)
+            # We need to re-fit the vectorizer and classifier on the updated data list
             X = self.vectorizer.fit_transform(texts)
             self.classifier.fit(X, labels)
+            
+            # Ensure directory exists
             os.makedirs(os.path.dirname(config.BRAIN_MODEL_PATH), exist_ok=True)
             with open(config.BRAIN_MODEL_PATH, 'wb') as f:
                 pickle.dump((self.vectorizer, self.classifier, self.data), f)
@@ -96,7 +107,9 @@ class IntentBrain:
         if os.path.exists(config.BRAIN_MODEL_PATH):
             try:
                 with open(config.BRAIN_MODEL_PATH, 'rb') as f:
-                    self.vectorizer, self.classifier, self.data = pickle.load(f)
+                    # Unpack the saved components
+                    v, c, d = pickle.load(f)
+                    self.vectorizer, self.classifier, self.data = v, c, d
             except Exception:
                 self.train()
         else:
@@ -104,7 +117,17 @@ class IntentBrain:
 
     def teach(self, text, intent):
         text_lower = text.lower().strip()
-        if (text_lower, intent) not in self.data:
+        # Add to data and retrain if it's new
+        if not any(text_lower == d[0] for d in self.data):
             print(f"Brain: Learning that '{text_lower}' means '{intent}'")
             self.data.append((text_lower, intent))
             self.train()
+
+    def analyze_style_and_reprogram(self, new_text):
+        """Updates internal lexicon weights based on specific keywords."""
+        words = new_text.lower().split()
+        if "aiya" in words or "hee-hee" in words:
+            for word in words:
+                # Assuming this method exists on the soul or memory object
+                if hasattr(self.soul, 'update_lexicon_weight'):
+                    self.soul.update_lexicon_weight(word, "mischief", +0.05)

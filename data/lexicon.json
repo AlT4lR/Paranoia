@@ -1,17 +1,13 @@
 {
-    "nouns": {
-        "coffin": {"spooky": 0.9, "professional": 0.7},
-        "tea": {"casual": 0.8, "professional": 0.4},
-        "butterfly": {"mystical": 1.0, "playful": 0.6}
-    },
-    "verbs": {
-        "bury": {"spooky": 0.8, "mischievous": 0.5},
-        "prank": {"mischievous": 1.0, "playful": 0.8},
-        "calculate": {"professional": 0.9, "serious": 0.7}
-    },
-    "fillers": {
-        "Aiya!": {"mischievous": 0.8, "playful": 0.9},
-        "Hee-hee~": {"mischievous": 1.0, "playful": 0.7},
-        "Hmm...": {"serious": 0.6, "worldliness": 0.8}
-    }
+    "fillers": [
+        {"text": "Aiya!", "mischief": 0.9, "casual": 0.7, "serious": 0.1},
+        {"text": "Hmm...", "mischief": 0.1, "casual": 0.3, "serious": 0.9},
+        {"text": "Hee-hee~", "mischief": 1.0, "casual": 0.8, "serious": 0.0},
+        {"text": "Well now,", "mischief": 0.3, "casual": 0.4, "serious": 0.6}
+    ],
+    "descriptors": [
+        {"text": "spooky", "mischief": 0.8, "serious": 0.4},
+        {"text": "efficient", "mischief": 0.1, "serious": 0.9},
+        {"text": "lively", "mischief": 0.6, "casual": 0.9}
+    ]
 }
