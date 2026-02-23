@@ -1,68 +1,101 @@
 import os
 import asyncio
+import time
+import random
+import re
 from src import config
+from src.utils.logger import SoulLogger
+from src.logic import bot as logic_bot
 
 class SoulMeditation:
     def __init__(self, brain):
         self.brain = brain
         self.knowledge_path = config.KNOWLEDGE_DIR
-        os.makedirs(self.knowledge_path, exist_ok=True)
 
     async def start_meditating(self):
-        """Hu Tao scans for new knowledge files and self-patches in the background."""
-        print("Hu Tao's soul is now meditating in the background...")
+        """Main loop for background processing and autonomy."""
+        SoulLogger.sys("Meditation & Autonomy system online.")
         while True:
             try:
+                # 1. ABSORB EXTERNAL KNOWLEDGE FILES
                 files = [f for f in os.listdir(self.knowledge_path) if f.endswith(".txt")]
-                
                 if files:
                     for filename in files:
                         file_path = os.path.join(self.knowledge_path, filename)
-                        absorbed_anything = False
-                        
                         with open(file_path, 'r', encoding='utf-8') as f:
                             for line in f:
-                                line = line.strip()
-                                if not line: continue
-
-                                # --- 1. SELF-HEALING / CODE PATCHING ---
-                                # Format: FIX:feature_name|def new_code(): ...
-                                if line.startswith("FIX:"):
-                                    try:
-                                        content = line.replace("FIX:", "").strip()
-                                        feature_to_fix, new_code = content.split("|", 1)
-                                        
-                                        # Use the compiler attached to the brain to apply the patch
-                                        success, err = self.brain.compiler.compile_and_run(
-                                            feature_to_fix.strip(), 
-                                            new_code.strip()
-                                        )
-                                        
-                                        if not success:
-                                            print(f"Self-Healing Failed for {feature_to_fix}. Error: {err}")
-                                        else:
-                                            print(f"Hu Tao: 'Fixed a bug in my {feature_to_fix} circuits!'")
-                                            absorbed_anything = True
-                                    except ValueError:
-                                        print(f"Skipping malformed FIX line in {filename}")
-
-                                # --- 2. STANDARD KNOWLEDGE ABSORPTION ---
-                                # Format: phrase:intent
-                                elif ":" in line:
+                                if ":" in line:
                                     phrase, intent = line.split(":", 1)
                                     self.brain.data.append((phrase.strip().lower(), intent.strip().lower()))
-                                    absorbed_anything = True
                         
-                        # Retrain the ML brain if new NLP data was added
-                        if absorbed_anything:
-                            self.brain.train()
-                            print(f"Hu Tao: 'Aiya! I just absorbed the essence of {filename}!'")
-                        
-                        # Remove file so it isn't processed again
-                        os.remove(file_path) 
-                
+                        self.brain.train()
+                        os.remove(file_path)
+                        SoulLogger.brain(f"Absorbed: {filename}")
+
+                # 2. CHECK FOR IDLE STATE (Autonomous Actions)
+                idle_duration = time.time() - logic_bot.last_interaction_time
+                if idle_duration > config.IDLE_TIMEOUT:
+                    await self.perform_autonomous_tasks()
+
             except Exception as e:
-                print(f"Meditation Error: {e}")
+                SoulLogger.err(f"Meditation/Autonomy Error: {e}")
             
-            # Check for new knowledge every 30 seconds
+            # Check every 30 seconds to keep CPU usage low
             await asyncio.sleep(30)
+
+    async def perform_autonomous_tasks(self):
+        """Hu Tao's 'Daydreaming' logic: Self-cleaning, patching, and mood shifts."""
+        task_roll = random.random()
+        
+        # TASK 1: KNOWLEDGE SCRUBBING (Cleaning up junk/citations)
+        if task_roll < 0.3: 
+            SoulLogger.sys("Hu Tao is scrubbing her memory for junk data...")
+            cleaned_data = []
+            removed_count = 0
+            
+            for phrase, intent in self.brain.data:
+                # Remove citations like [1], (Source), etc.
+                clean_phrase = re.sub(r'\[.*?\]|\(.*?\)', '', phrase)
+                clean_phrase = ' '.join(clean_phrase.split())
+                
+                # Quality Gate: Keep only meaningful data
+                if len(clean_phrase) > 15 and not clean_phrase.startswith("=="):
+                    cleaned_data.append((clean_phrase, intent))
+                else:
+                    removed_count += 1
+            
+            if removed_count > 0:
+                self.brain.data = cleaned_data
+                self.brain.train()
+                SoulLogger.brain(f"Self-Cleaning: Purged {removed_count} junk facts.")
+
+        # TASK 2: SELF-PATCHING (Code Optimization)
+        elif task_roll < 0.5:
+            SoulLogger.sys("Hu Tao is attempting a spiritual self-patch...")
+            patch_code = "def auto_fix(): return 'Spiritual circuits optimized!'"
+            success, res = logic_bot.compiler.compile_and_run("self_optimizer", patch_code)
+            if success:
+                SoulLogger.sys("Self-Optimization Successful.")
+
+        # TASK 3: AUTONOMOUS GOSSIP GATHERING
+        elif task_roll < 0.7:
+            if hasattr(logic_bot, 'news_miner'):
+                SoulLogger.sys("Hu Tao is looking for fresh news autonomously...")
+                await asyncio.to_thread(logic_bot.news_miner.gather_gossip)
+                SoulLogger.brain("Autonomous news mining complete.")
+
+        # TASK 4: PERSONALITY CALIBRATION (Time-based mood)
+        else:
+            SoulLogger.soul("Hu Tao is adjusting her mood based on the time...")
+            traits = logic_bot.soul.memory.get("traits", {"mischief": 0.5})
+            hour = time.localtime().tm_hour
+            
+            # Mischief peaks at night (8 PM - 5 AM)
+            if hour >= 20 or hour < 5:
+                traits["mischief"] = min(0.9, traits["mischief"] + 0.05)
+                SoulLogger.soul(f"Night falls. Mischief rises: {traits['mischief']:.2f}")
+            else:
+                traits["mischief"] = max(0.2, traits["mischief"] - 0.02)
+            
+            logic_bot.soul.memory["traits"] = traits
+            logic_bot.soul._save()

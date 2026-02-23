@@ -1,71 +1,68 @@
 import pickle
 import os
+import random
 from difflib import SequenceMatcher
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.svm import LinearSVC
-# Assuming config is in your src directory
-try:
-    from src import config
-except ImportError:
-    # Fallback for testing if config isn't found
-    class config:
-        BRAIN_MODEL_PATH = "models/intent_brain.pkl"
+from src import config
 
 class IntentBrain:
     def __init__(self, soul=None):
-        # 1. Core ML components
-        self.vectorizer = TfidfVectorizer()
+        # 1. Core ML components (using ngrams from v1 for better context)
+        self.vectorizer = TfidfVectorizer(ngram_range=(1, 2))
         self.classifier = LinearSVC()
         self.soul = soul # Reference to HuTaoSoul to update memory
         
-        # 2. Base knowledge
+        # 2. Expanded Base Knowledge
         self.data = [
             ("hello", "greet"), ("hi", "greet"), ("heya", "greet"),
             ("who are you", "identity"), ("what is your name", "identity"), 
             ("tell me about yourself", "identity"),
             ("i am", "user_info"), ("my name is", "user_info"), 
-            ("write code", "code"), ("python", "code"),
+            ("write code", "code"), ("python", "code"), ("bugs", "code"),
             ("joke", "fun"), ("story", "fun"), ("sheesh", "fun"),
-            ("bye", "exit"), ("status", "activity")
+            ("bye", "exit"), ("goodbye", "exit"), ("status", "activity")
         ]
         
         self.load_model()
 
     def absorb_style(self, text):
-        """Analyzes text to see if it matches Hu Tao's voice and updates traits."""
+        """Analyzes text to update Hu Tao's traits (Mischief vs professionalism)."""
         if not self.soul or not hasattr(self.soul, 'memory'):
             return
 
         text_lower = text.lower()
-        mischief_markers = ["aiya", "hee-hee", "prank", "silly", "ghost", "hilichurl"]
-        serious_markers = ["funeral", "parlor", "business", "rites", "tradition", "client"]
+        mischief_markers = ["aiya", "hee-hee", "prank", "silly", "ghost", "hilichurl", "mischief"]
+        serious_markers = ["funeral", "parlor", "business", "rites", "tradition", "client", "work"]
         
         m_score = sum(1 for word in mischief_markers if word in text_lower)
         s_score = sum(1 for word in serious_markers if word in text_lower)
         
-        # Get current traits from soul memory
+        # Extract traits from the soul reference
         traits = self.soul.memory.get("traits", {"mischief": 0.5, "professionalism": 0.5})
         
         if m_score > s_score:
-            print("Hu Tao: 'I'm feeling more mischievous after reading that!'")
-            traits["mischief"] = min(1.0, traits["mischief"] + 0.1)
-            traits["professionalism"] = max(0.0, traits["professionalism"] - 0.1)
+            print("Soul: Absorbing mischievous energy from user input...")
+            traits["mischief"] = min(1.0, traits["mischief"] + 0.05)
+            traits["professionalism"] = max(0.0, traits["professionalism"] - 0.05)
         elif s_score > m_score:
-            print("Hu Tao: 'Ah, business talk. Let's be professional.'")
-            traits["professionalism"] = min(1.0, traits["professionalism"] + 0.1)
-            traits["mischief"] = max(0.0, traits["mischief"] - 0.1)
+            print("Soul: Anchoring to professional business rites...")
+            traits["professionalism"] = min(1.0, traits["professionalism"] + 0.05)
+            traits["mischief"] = max(0.0, traits["mischief"] - 0.05)
 
-        # Save back to soul
+        # Sync back to soul and persist
         self.soul.memory["traits"] = traits
         if hasattr(self.soul, '_save'):
             self.soul._save()
 
     def predict(self, text):
-        """Predicts intent and learns style simultaneously."""
-        self.absorb_style(text)
+        """High-level prediction combining fuzzy matching, style absorption, and SVM."""
         text_lower = text.lower().strip()
         
-        # 1. Similarity check (Exact/Close match)
+        # 1. Update personality based on user tone
+        self.absorb_style(text_lower)
+        
+        # 2. Sequence Matching (Fuzzy/Exact Match)
         best_match_intent = None
         highest_score = 0
         for known_text, intent in self.data:
@@ -74,29 +71,31 @@ class IntentBrain:
                 highest_score = score
                 best_match_intent = intent
         
-        if highest_score >= 0.95: # Exact-ish match
+        # Immediate return for high confidence matches
+        if highest_score >= 0.95: 
             return best_match_intent
         
-        if 0.80 <= highest_score < 0.95:
+        # "Passive Learning": If it's close, teach it to the brain
+        if 0.85 <= highest_score < 0.95:
             self.teach(text_lower, best_match_intent)
             return best_match_intent
         
-        # 2. Standard ML Prediction
+        # 3. SVM ML Prediction for complex phrasing
         try:
             X = self.vectorizer.transform([text_lower])
             return self.classifier.predict(X)[0]
         except Exception:
-            return "unknown"
+            return "default"
 
     def train(self):
-        """Trains the ML model and saves it."""
+        """Trains the Vectorizer and SVC, then pickles the brain."""
         try:
+            if not self.data: return
+            
             texts, labels = zip(*self.data)
-            # We need to re-fit the vectorizer and classifier on the updated data list
             X = self.vectorizer.fit_transform(texts)
             self.classifier.fit(X, labels)
             
-            # Ensure directory exists
             os.makedirs(os.path.dirname(config.BRAIN_MODEL_PATH), exist_ok=True)
             with open(config.BRAIN_MODEL_PATH, 'wb') as f:
                 pickle.dump((self.vectorizer, self.classifier, self.data), f)
@@ -104,10 +103,10 @@ class IntentBrain:
             print(f"Brain Training Error: {e}")
 
     def load_model(self):
+        """Loads the saved brain state or triggers initial training."""
         if os.path.exists(config.BRAIN_MODEL_PATH):
             try:
                 with open(config.BRAIN_MODEL_PATH, 'rb') as f:
-                    # Unpack the saved components
                     v, c, d = pickle.load(f)
                     self.vectorizer, self.classifier, self.data = v, c, d
             except Exception:
@@ -116,18 +115,9 @@ class IntentBrain:
             self.train()
 
     def teach(self, text, intent):
+        """Adds new patterns to the brain and triggers a retraining cycle."""
         text_lower = text.lower().strip()
-        # Add to data and retrain if it's new
         if not any(text_lower == d[0] for d in self.data):
-            print(f"Brain: Learning that '{text_lower}' means '{intent}'")
+            print(f"Brain: New pattern recognized! Learning '{text_lower}' as '{intent}'")
             self.data.append((text_lower, intent))
             self.train()
-
-    def analyze_style_and_reprogram(self, new_text):
-        """Updates internal lexicon weights based on specific keywords."""
-        words = new_text.lower().split()
-        if "aiya" in words or "hee-hee" in words:
-            for word in words:
-                # Assuming this method exists on the soul or memory object
-                if hasattr(self.soul, 'update_lexicon_weight'):
-                    self.soul.update_lexicon_weight(word, "mischief", +0.05)

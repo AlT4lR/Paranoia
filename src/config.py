@@ -18,6 +18,9 @@ HU_TAO_MESSAGE = "#FFB347"
 HU_TAO_DARK = "#333333"
 HU_TAO_WHITE = "#FFFAFA"
 
+IDLE_TIMEOUT = 180  # 3 minutes of silence triggers autonomous mode
+AUTONOMOUS_CHANCE = 0.3 # 30% chance to perform a task every idle cycle
+
 # --- App Settings ---
 USER_NAME = "Altair"
 DEFAULT_USER_NAME = "Altair"
