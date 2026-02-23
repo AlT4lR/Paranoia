@@ -1,5 +1,5 @@
 # src/logic/bot.py
-import asyncio, os, re, time
+import asyncio, os, time
 from src.soul.brain import IntentBrain
 from src.soul.consciousness import HuTaoSoul
 from src.soul.web_miner import SpiritSearcher
@@ -8,6 +8,7 @@ from src.utils.compiler import SoulCompiler
 from src.database import save_chat_session, get_chat_session, get_all_facts
 from src.utils.logger import SoulLogger
 from src import config
+from src.logic import dynamic # Added dynamic import
 
 brain = IntentBrain()
 soul = HuTaoSoul()
@@ -16,20 +17,22 @@ compiler = SoulCompiler()
 news_miner = NewsMiner(api_key="YOUR_KEY") 
 last_interaction_time = time.time()
 processing_lock = asyncio.Lock()
+last_user_message = ""
 
 async def process_user_message(user_message, user_id, gui_updater):
-    global last_interaction_time
+    global last_interaction_time, last_user_message
     async with processing_lock:
         last_interaction_time = time.time()
         msg_clean = str(user_message).strip()
         msg_lower = msg_clean.lower()
-        SoulLogger.sys(f"Request: {msg_clean}")
+        
+        SoulLogger.sys(f"Processing Request: '{msg_clean}'")
 
         try:
-            # 1. SPECIAL COMMANDS
+            # --- 1. SPECIAL COMMANDS ---
             if msg_lower == "!reset brain":
+                SoulLogger.sys("Manual override: Purging Brain Model.")
                 if os.path.exists(config.BRAIN_MODEL_PATH): os.remove(config.BRAIN_MODEL_PATH)
-                # Ensure we reset with AT LEAST 2 classes
                 brain.data = list(brain.base_data)
                 brain.train()
                 gui_updater.update_chat_log("Hu Tao: I've cleared my head! Fresh as a daisy!", sender="hutao")
@@ -37,9 +40,10 @@ async def process_user_message(user_message, user_id, gui_updater):
 
             if msg_lower.startswith("!teach "):
                 raw = msg_clean[7:].strip()
-                new_intent = raw.split(":")[-1].strip()
-                brain.teach(last_user_message, new_intent)
-                gui_updater.update_chat_log(f"Hu Tao: Learned that '{last_user_message}' is '{new_intent}'!", sender="hutao")
+                if ":" in raw:
+                    new_intent = raw.split(":")[-1].strip()
+                    brain.teach(last_user_message, new_intent)
+                    gui_updater.update_chat_log(f"Hu Tao: Learned that '{last_user_message}' is '{new_intent}'!", sender="hutao")
                 return
 
             if msg_lower.startswith("!mine "):
@@ -48,28 +52,42 @@ async def process_user_message(user_message, user_id, gui_updater):
                 gui_updater.update_chat_log(f"Hu Tao: {res}", sender="hutao")
                 return
 
-            if msg_lower.startswith("!news"):
-                res = await asyncio.to_thread(news_miner.gather_gossip)
-                gui_updater.update_chat_log(f"Hu Tao: {res}", sender="hutao")
-                return
+            # --- NEW: !synthesize command for manual feature adding ---
+            # Usage: !synthesize [name] | [python code]
+            if msg_lower.startswith("!synthesize "):
+                parts = msg_clean[12:].split("|")
+                if len(parts) == 2:
+                    f_name = parts[0].strip()
+                    f_code = parts[1].strip()
+                    success, res = dynamic.save_new_capability(f_name, f_code, compiler)
+                    gui_updater.update_chat_log(f"Hu Tao: {res}", sender="hutao")
+                    # Auto-teach the brain that this name triggers a dynamic feature
+                    brain.teach(f_name, "dynamic_feature")
+                    return
 
-            # 2. DYNAMIC FEATURES
+            # --- 2. DYNAMIC FEATURE EXECUTION ---
+            # If the brain thinks this is a dynamic feature, check the compiler registry
             intent = brain.predict(msg_clean)
             if intent == "dynamic_feature":
                 for f_key in compiler.registry.keys():
+                    # If the command name is in the user's message
                     if f_key.split("_")[0] in msg_lower:
+                        SoulLogger.sys(f"Executing Dynamic Feature: {f_key}")
                         res = compiler.execute_feature(f_key)
                         gui_updater.update_chat_log(f"Hu Tao: {res}", sender="hutao")
                         return
 
-            # 3. NORMAL CONVERSATION
+            # --- 3. NORMAL CONVERSATION ---
             last_user_message = msg_clean
             user_facts = await get_all_facts(user_id)
             response = soul.generate_thought(intent, brain.data, user_facts, msg_clean)
+            
             gui_updater.update_chat_log(f"Hu Tao: {response}", sender="hutao")
+            SoulLogger.sys(f"Request handled via intent: {intent}")
 
+            # Save to history
             _, hist = await get_chat_session(user_id)
             await save_chat_session(user_id, "soul_chat", hist + [f"U: {msg_clean}", f"H: {response}"])
 
         except Exception as e:
-            SoulLogger.err(f"Logic Error: {e}")
+            SoulLogger.err(f"Bot Logic Error: {e}")
