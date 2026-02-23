@@ -1,12 +1,12 @@
 import datetime
+import traceback
+import sys
 
 class SoulLogger:
-    # ANSI Color Codes for terminal
-    HEADER = '\033[95m'
-    BRAIN = '\033[94m'   # Blue
-    SOUL = '\033[92m'    # Green
-    SYSTEM = '\033[93m'  # Yellow
-    ERROR = '\033[91m'   # Red
+    BRAIN = '\033[94m'
+    SOUL = '\033[92m'
+    SYSTEM = '\033[93m'
+    ERROR = '\033[91m'
     ENDC = '\033[0m'
     BOLD = '\033[1m'
 
@@ -29,3 +29,4 @@ class SoulLogger:
     @classmethod
     def err(cls, message):
         print(f"[{cls._get_time()}] {cls.ERROR}[!! ERROR !!]{cls.ENDC} {cls.BOLD}{message}{cls.ENDC}")
+        traceback.print_exc(file=sys.stdout)

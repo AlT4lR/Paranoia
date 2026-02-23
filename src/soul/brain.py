@@ -1,123 +1,89 @@
+# src/soul/brain.py
 import pickle
 import os
-import random
+import shutil
+from textblob import TextBlob
 from difflib import SequenceMatcher
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.svm import LinearSVC
 from src import config
+from src.utils.logger import SoulLogger
 
 class IntentBrain:
     def __init__(self, soul=None):
-        # 1. Core ML components (using ngrams from v1 for better context)
         self.vectorizer = TfidfVectorizer(ngram_range=(1, 2))
         self.classifier = LinearSVC()
-        self.soul = soul # Reference to HuTaoSoul to update memory
-        
-        # 2. Expanded Base Knowledge
-        self.data = [
-            ("hello", "greet"), ("hi", "greet"), ("heya", "greet"),
-            ("who are you", "identity"), ("what is your name", "identity"), 
-            ("tell me about yourself", "identity"),
-            ("i am", "user_info"), ("my name is", "user_info"), 
-            ("write code", "code"), ("python", "code"), ("bugs", "code"),
-            ("joke", "fun"), ("story", "fun"), ("sheesh", "fun"),
-            ("bye", "exit"), ("goodbye", "exit"), ("status", "activity")
+        # Essential base data to prevent "1-class" training errors
+        self.base_data = [
+            ("hello", "greet"), ("hi", "greet"), 
+            ("bye", "exit"), ("goodbye", "exit"),
+            ("yes", "agree"), ("no", "negative")
         ]
-        
+        self.data = list(self.base_data)
         self.load_model()
 
-    def absorb_style(self, text):
-        """Analyzes text to update Hu Tao's traits (Mischief vs professionalism)."""
-        if not self.soul or not hasattr(self.soul, 'memory'):
-            return
-
-        text_lower = text.lower()
-        mischief_markers = ["aiya", "hee-hee", "prank", "silly", "ghost", "hilichurl", "mischief"]
-        serious_markers = ["funeral", "parlor", "business", "rites", "tradition", "client", "work"]
-        
-        m_score = sum(1 for word in mischief_markers if word in text_lower)
-        s_score = sum(1 for word in serious_markers if word in text_lower)
-        
-        # Extract traits from the soul reference
-        traits = self.soul.memory.get("traits", {"mischief": 0.5, "professionalism": 0.5})
-        
-        if m_score > s_score:
-            print("Soul: Absorbing mischievous energy from user input...")
-            traits["mischief"] = min(1.0, traits["mischief"] + 0.05)
-            traits["professionalism"] = max(0.0, traits["professionalism"] - 0.05)
-        elif s_score > m_score:
-            print("Soul: Anchoring to professional business rites...")
-            traits["professionalism"] = min(1.0, traits["professionalism"] + 0.05)
-            traits["mischief"] = max(0.0, traits["mischief"] - 0.05)
-
-        # Sync back to soul and persist
-        self.soul.memory["traits"] = traits
-        if hasattr(self.soul, '_save'):
-            self.soul._save()
+    def nlp_clean(self, text):
+        try:
+            blob = TextBlob(str(text).lower().strip())
+            return " ".join([w.lemmatize() for w in blob.words])
+        except:
+            return str(text).lower().strip()
 
     def predict(self, text):
-        """High-level prediction combining fuzzy matching, style absorption, and SVM."""
-        text_lower = text.lower().strip()
+        clean_text = self.nlp_clean(text)
+        # 1. Fuzzy Matching
+        best_match, highest = None, 0
+        for kt, intent in self.data:
+            score = SequenceMatcher(None, clean_text, kt).ratio()
+            if score > highest: highest, best_match = score, intent
+        if highest > 0.85: return best_match
         
-        # 1. Update personality based on user tone
-        self.absorb_style(text_lower)
-        
-        # 2. Sequence Matching (Fuzzy/Exact Match)
-        best_match_intent = None
-        highest_score = 0
-        for known_text, intent in self.data:
-            score = SequenceMatcher(None, text_lower, known_text).ratio()
-            if score > highest_score:
-                highest_score = score
-                best_match_intent = intent
-        
-        # Immediate return for high confidence matches
-        if highest_score >= 0.95: 
-            return best_match_intent
-        
-        # "Passive Learning": If it's close, teach it to the brain
-        if 0.85 <= highest_score < 0.95:
-            self.teach(text_lower, best_match_intent)
-            return best_match_intent
-        
-        # 3. SVM ML Prediction for complex phrasing
+        # 2. ML Prediction
         try:
-            X = self.vectorizer.transform([text_lower])
+            if not hasattr(self.classifier, "classes_"): return "default"
+            X = self.vectorizer.transform([clean_text])
             return self.classifier.predict(X)[0]
-        except Exception:
-            return "default"
+        except: return "default"
 
     def train(self):
-        """Trains the Vectorizer and SVC, then pickles the brain."""
+        """Saves using an Atomic Write and prevents single-class errors."""
         try:
-            if not self.data: return
+            # ENSURE AT LEAST 2 CLASSES EXIST
+            unique_labels = set([item[1] for item in self.data])
+            if len(unique_labels) < 2:
+                # If only 1 class, inject base data to fix the model
+                for item in self.base_data:
+                    if item not in self.data: self.data.append(item)
             
-            texts, labels = zip(*self.data)
+            texts, labels = zip(*[(self.nlp_clean(t), l) for t, l in self.data])
             X = self.vectorizer.fit_transform(texts)
             self.classifier.fit(X, labels)
             
             os.makedirs(os.path.dirname(config.BRAIN_MODEL_PATH), exist_ok=True)
-            with open(config.BRAIN_MODEL_PATH, 'wb') as f:
+            temp_path = config.BRAIN_MODEL_PATH + ".tmp"
+            with open(temp_path, 'wb') as f:
                 pickle.dump((self.vectorizer, self.classifier, self.data), f)
-        except Exception as e:
-            print(f"Brain Training Error: {e}")
+            shutil.move(temp_path, config.BRAIN_MODEL_PATH)
+            SoulLogger.sys("Brain stabilized and saved.")
+        except Exception as e: 
+            SoulLogger.err(f"Restoration failed: {e}")
 
     def load_model(self):
-        """Loads the saved brain state or triggers initial training."""
         if os.path.exists(config.BRAIN_MODEL_PATH):
             try:
                 with open(config.BRAIN_MODEL_PATH, 'rb') as f:
                     v, c, d = pickle.load(f)
                     self.vectorizer, self.classifier, self.data = v, c, d
-            except Exception:
+                SoulLogger.sys("Brain model loaded.")
+            except:
+                SoulLogger.err("Brain corruption. Purging file...")
+                if os.path.exists(config.BRAIN_MODEL_PATH): os.remove(config.BRAIN_MODEL_PATH)
                 self.train()
         else:
             self.train()
 
     def teach(self, text, intent):
-        """Adds new patterns to the brain and triggers a retraining cycle."""
-        text_lower = text.lower().strip()
-        if not any(text_lower == d[0] for d in self.data):
-            print(f"Brain: New pattern recognized! Learning '{text_lower}' as '{intent}'")
-            self.data.append((text_lower, intent))
+        clean_p = self.nlp_clean(text)
+        if (clean_p, intent) not in self.data:
+            self.data.append((clean_p, intent))
             self.train()
