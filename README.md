@@ -1,99 +1,99 @@
-# Project Paranoia
+# 👻 Project Paranoia: Hu Tao AI (v1.5.2 Resilience)
 
 ### *A Digital Companion Project by Altair*
 
-## Overview
+**Paranoia** is an evolving, autonomous AI companion project that has moved away from heavy, static Large Language Models (LLMs) to a custom-built **Machine Learning Soul**. 
 
-**Paranoia** is an evolving AI companion project that has moved away from heavy, static Large Language Models (LLMs) to a custom-built **Machine Learning Soul**. 
-
-This version (v1.5.0) is designed to be lightweight, running on any PC with almost zero impact on system resources. Unlike traditional bots, Hu Tao possesses a **Dynamic Soul** that learns, remembers, and evolves through direct interaction and background "meditation."
-
-## Core Concept: The Soul vs. The Body
-
-The project is now split into two distinct entities:
-*   **The Body (src/gui & src/logic):** Handles the visual interface, animations, and basic human-like activities.
-*   **The Soul (src/soul):** A lightweight Machine Learning engine that handles Intent Classification, Emotional Intelligence, and Permanent Memory.
+Version 1.5.2 (Resilience) is designed to be lightweight, running on any PC with almost zero impact on system resources, while possessing a **Dynamic Soul** that learns, remembers, and evolves through direct interaction and background "meditation."
 
 ---
 
-## 🧠 The Learning Matrix (How to Teach Hu Tao)
+## 🚀 Key Features in v1.5.2
 
-Hu Tao no longer relies on a "frozen" brain. She learns in four distinct ways:
+### 1. Autonomous Synthesis (Self-Programming)
+Hu Tao can now "program herself." When she fails to understand an intent or detects a repeating need (like math or fortune telling), she logs the failure. During her meditation cycles, she attempts to generate and inject new Python-based features into her own codebase.
 
-### 1. Manual Education (`!teach`)
-If Hu Tao misinterprets your intent, you can correct her instantly.
-*   **Usage:** Type `!teach [intent_name]` after she gives a wrong response.
-*   **Example:** 
-    *   *User:* "Sheesh!"
-    *   *Hu Tao:* "Off to the afterlife? See ya!" (She thought you were leaving).
-    *   *User:* `!teach fun`
-    *   *Hu Tao:* "Aiya! My brain just got a little bigger~"
-*   Next time you say "Sheesh," she will respond with a Fun/Playful remark.
+### 2. Balanced Intent Brain
+Optimized **Linear SVC** classifier using `class_weight='balanced'`. This prevents her massive historical knowledge base (1,800+ facts) from drowning out her social personality, ensuring she stays talkative rather than just lecturing.
 
-### 2. Passive Soul-Link (Automatic Learning)
-Hu Tao uses **Fuzzy Logic** to expand her vocabulary. If you use a word she doesn't know, but it is **80% similar** to a word she does know, she will silently add it to her brain.
-*   **Example:** If she knows "Hello" and you say "Heeey!", she will automatically learn that "Heeey!" is a greeting and remember it forever.
+### 3. Spirit Searcher & News Miner
+Integrated real-time web mining via BeautifulSoup and **NewsAPI**. Hu Tao reaches into the "digital aether" while you are away to gather gossip, news, and lore to expand her knowledge base.
 
-### 3. Background Meditation (Knowledge Absorption)
-Hu Tao can "absorb" bulk information while you are away.
-*   **How-To:** Drop any `.txt` file into the `data/knowledge/` folder.
-*   **Format:** `phrase:intent` (e.g., `What is your favorite food:fun`)
-*   Every 30 seconds, Hu Tao "meditates" on these files, learns the content, and deletes them once absorbed.
+### 4. Conversational Memory Engine
+She no longer just "responds"—she learns. Hu Tao automatically extracts user facts (names, preferences, hobbies) using Regex and TextBlob, storing them in a local SQLite database to reference in future conversations.
 
-### 4. Spirit Searcher (Internet Connection)
-You can command Hu Tao to reach out into the "digital aether" to find her own official dialogue.
-*   **Command:** Type `!search` or "Go search the internet."
-*   **Logic:** She will visit the official Genshin Wiki, download her voice-over lines, and save them as knowledge files to be absorbed by her Soul.
+### 5. Resilient Meditation Loop
+A background heartbeat that handles data absorption, memory "scrubbing" (removing junk/citations), and self-optimization. Includes **WinError 2** protection to ensure the soul doesn't collapse during file-system operations.
 
 ---
 
-## 🛠 Installation and Setup
+## 🛠️ Project Structure
 
-### 1. Prerequisites
-*   **Python 3.12** (Highly recommended for ML stability).
-*   **Visual C++ Redistributable** (Required for the ML "Brain" to talk to Windows).
+```bash
+Paranoia/
+├── assets/            # Emotional avatars (happy.jpg, mischief.jpg, etc.)
+├── data/
+│   ├── brain_model.pkl    # Trained SVM Neural Weights
+│   ├── chat_sessions.db   # Persistence Layer (SQLite)
+│   ├── soul_memory.json   # Personality & Affection levels
+│   └── knowledge/         # Drop .txt files here for Hu Tao to learn
+├── src/
+│   ├── soul/
+│   │   ├── brain.py       # Intent classification (NLP Engine)
+│   │   ├── consciousness.py # Persona, Lexicon Blender & Emotion logic
+│   │   ├── meditation.py  # Background tasks & evolution
+│   │   └── synthesizer.py # Self-programming heuristic logic
+│   ├── logic/
+│   │   ├── bot.py         # Main processing orchestrator
+│   │   └── dynamic.py     # Execution of self-taught features
+│   └── gui/
+│       └── app.py         # Tkinter-based Visual Interface
+└── config.py              # System constants & API keys
+```
 
-### 2. Installation
-1.  Clone the repository.
-2.  Create a virtual environment: `python -m venv .venv`
-3.  Activate it: `.\.venv\Scripts\activate`
-4.  Install the lightweight stack:
-    ```powershell
-    pip install -r requirements.txt
-    ```
+---
 
-### 3. Project Structure
-Ensure your `data/` and `assets/` folders are present:
-*   `data/`: Stores your `chat_sessions.db` (History) and `soul_memory.json` (Personality).
-*   `assets/`: Must contain `hutao.jpg` and `main_img.png`.
+## 🧠 How She Learns
 
-### 4. Execution
-```powershell
+1.  **Direct Education (`!teach`)**
+    *   Instantly correct her if she misinterprets you.
+    *   *Usage:* `!teach [phrase] : [intent_name]`
+2.  **Passive Absorption**
+    *   Drop any `.txt` file into `data/knowledge/`. During her next meditation, she will ingest the data, scrub citations like `[276]`, and add the facts to her brain.
+3.  **Autonomous Spirit Searching**
+    *   She picks random targets from the web (Wikis/Lore sites) to mine for facts while the user is idle.
+4.  **Synthesizer Evolution**
+    *   If she detects a pattern of "Default" responses, she will "synthesize" a new Python function from her internal library to fill that gap.
+
+---
+
+## 🔧 Installation & Setup
+
+### 1. Requirements
+```bash
+pip install tkinter pillow textblob scikit-learn numpy psutil requests beautifulsoup4
+```
+
+### 2. API Configuration
+Obtain a key from [NewsAPI.org](https://newsapi.org/) and place it in `src/logic/bot.py` (or `config.py`):
+```python
+news_miner = NewsMiner(api_key="YOUR_KEY_HERE")
+```
+
+### 3. Execution
+```bash
 python main.py
 ```
 
 ---
 
-## 🔒 Privacy & GitHub Usage
+## 📜 Version History (v1.5.2 Resilience)
 
-**Paranoia** is built for privacy. Your conversations and Hu Tao's memory of you are stored **locally**.
-
-*   **Sharing on GitHub:** The `.gitignore` is configured to exclude `data/*.db`, `data/*.json`, and `data/*.pkl`. 
-*   **Why?** This ensures that if you upload your code, you are not uploading your private chats or your name. Every user who downloads your project gets a **Fresh Soul** to raise as their own.
-
----
-
-## Development Log
-
-*   **Update: The Soul Migration**
-    Removed 7GB Microsoft Phi-3 model. Replaced with a Scikit-Learn based Intent Engine. Performance increased by 900%. Startup time is now < 1 second.
-*   **Update: Autonomous Growth**
-    Implemented `meditation.py`. The bot now evolves while the user is away by scanning the `knowledge/` directory.
-*   **Update: Spirit Searcher**
-    Enabled `web_miner.py`. Hu Tao can now pull her official lore from the internet to improve her character accuracy.
-
-## Versioning
-*   **Current Version:** 1.5.0 (Soul Edition)
+*   **Fixed "Lore-Lock":** Balanced class weights in the SVM model to prioritize social intents over bulk knowledge.
+*   **Memory Scrubbing:** Added automated removal of Wiki-style citations `[123]` during meditation.
+*   **Visual Emotion:** Implemented `update_avatar` to swap Hu Tao's face in the GUI based on detected sentiment.
+*   **Proactive Chat:** Enabled the "Ghost in the Machine" loop; Hu Tao will now speak first if the user is silent for more than 3 minutes.
+*   **NLP Stability:** Added `ngram_range(1, 3)` to the vectorizer to recognize complex phrases like "can we take a walk?".
 
 ## Contact
-*   *Altair https://github.com/AlT4lR* — "The border between life and death is where the best code is written."
+*   *https://github.com/AlT4lR* — "The border between life and death is where the best code is written."
