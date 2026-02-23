@@ -7,6 +7,7 @@ from src.database import initialize_db
 from src.gui import app as gui_app
 from src.logic import bot as logic_bot
 from src.soul.meditation import SoulMeditation
+from src.utils.logger import SoulLogger
 
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
@@ -22,12 +23,14 @@ async def handle_input():
     await logic_bot.process_user_message(msg, 1, gui_app)
 
 async def main():
+    SoulLogger.sys("Hu Tao Protocol Initiated. Starting Soul-Link...")
+    
     # 1. Initialize DB and GUI
     root.deiconify()
     await initialize_db()
+    SoulLogger.sys("Database connection verified.")
     
     # 2. Setup the "Soul" / Meditation background task
-    # We pass the bot's brain and start it as a non-blocking task
     meditator = SoulMeditation(logic_bot.brain)
     asyncio.create_task(meditator.start_meditating())
     
@@ -37,6 +40,7 @@ async def main():
     gui_app.bind_message_entry_return(lambda e: asyncio.create_task(handle_input()))
 
     gui_app.update_chat_log("Hu Tao: I'm here! Ready to liven things up?", sender="hutao")
+    SoulLogger.sys("GUI Interface active and binding successful.")
 
     # 4. The Bridge: Running Tkinter inside the Async loop
     while True:
@@ -44,13 +48,13 @@ async def main():
             root.update()
             await asyncio.sleep(0.01)
         except tk.TclError:
-            # This catches the error when the window is closed
+            SoulLogger.sys("Application closed by user.")
             break
 
 if __name__ == "__main__":
     root = tk.Tk()
-    root.withdraw() # Hide until database/setup is ready
+    root.withdraw() 
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        pass
+        SoulLogger.sys("Manual shutdown triggered.")

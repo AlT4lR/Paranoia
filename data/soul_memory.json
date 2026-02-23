@@ -1,5 +1,8 @@
 {
-    "affection": 57,
+    "affection": 58,
     "soul_level": 1,
-    "messages_sent": 38
+    "messages_sent": 83,
+    "traits": {
+        "mischief": 0.43999999999999995
+    }
 }

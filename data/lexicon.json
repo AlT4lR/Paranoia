@@ -6,8 +6,8 @@
         {"text": "Well now,", "mischief": 0.3, "casual": 0.4, "serious": 0.6}
     ],
     "descriptors": [
-        {"text": "spooky", "mischief": 0.8, "serious": 0.4},
-        {"text": "efficient", "mischief": 0.1, "serious": 0.9},
-        {"text": "lively", "mischief": 0.6, "casual": 0.9}
+        {"text": "spooky", "mischief": 0.9},
+        {"text": "efficient", "serious": 0.9},
+        {"text": "lively", "casual": 0.8}
     ]
 }
