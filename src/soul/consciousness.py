@@ -1,6 +1,5 @@
 import random, json, os, re
 from datetime import datetime
-from textblob import TextBlob
 from src import config
 from src.utils.logger import SoulLogger
 from src.database import save_fact 
@@ -22,35 +21,13 @@ class HuTaoSoul:
 
     def _save(self):
         """Saves current state to the soul JSON file."""
-        with open(self.path, 'w') as f: 
+        with open(self.path, 'w', encoding='utf-8') as f: 
             json.dump(self.memory, f, indent=4)
-
-    def generate_idle_thought(self, user_facts):
-        """
-        Generates a variety of proactive messages.
-        Uses randomized pools and merges user-specific knowledge.
-        """
-        user_name = user_facts.get("name", "Traveler")
-        hobby = user_facts.get("hobby", "wandering the hills")
-        
-        # Diversity pool for proactive engagement
-        idle_pool = [
-            (f"Aiya, {user_name}! The sun is high, but the spirits are restless... wanna go for a stroll?", "happy"),
-            (f"Hee-hee! I was just thinking about how you enjoy {hobby}... shall we find an adventure related to that?", "mischief"),
-            (f"Business is slow at the parlor today. Maybe I should go hand out some coupons? Want one, {user_name}?", "happy"),
-            (f"I found a particularly interesting butterfly today. It reminded me of you!~", "happy"),
-            (f"Oh! {user_name}! Are you awake? I've got a new poem I'm working on!", "surprised"),
-            (f"Zhongli is off sipping tea again... leaving me all alone! Come entertain the Director!~", "mischief"),
-            (f"The border between life and death is thin today... perfect for an adventure, don't you think?", "mischief")
-        ]
-        
-        return random.choice(idle_pool)
 
     def get_time_response(self):
         """Returns a randomized, personality-driven time response."""
         now = datetime.now()
         current_time = now.strftime('%I:%M %p')
-        
         time_variants = [
             f"It's {current_time}! Perfect for a mid-day prank, don't you think?",
             f"The clock says {current_time}. Time flies when you're having fun... or when you're a ghost!~",
@@ -59,6 +36,20 @@ class HuTaoSoul:
             f"It's {current_time}. Should we grab some tea, or maybe go for a walk?"
         ]
         return random.choice(time_variants), "happy"
+
+    def generate_idle_thought(self, user_facts):
+        """Generates variety for proactive messages using user-specific knowledge."""
+        name = user_facts.get("name", "Traveler")
+        hobby = user_facts.get("hobby", "wandering")
+        idle_pool = [
+            (f"Aiya, {name}! Want to go for a stroll?", "happy"),
+            (f"I was thinking about how you enjoy {hobby}... shall we?", "mischief"),
+            (f"Business is slow... want a funeral coupon, {name}?", "happy"),
+            (f"I found a butterfly! It reminded me of you!~", "happy"),
+            (f"Zhongli is off sipping tea again... come entertain me!", "mischief"),
+            (f"The border between life and death is thin today... perfect for an adventure, {name}!", "mischief")
+        ]
+        return random.choice(idle_pool)
 
     def find_relevant_fact(self, user_input, brain_data):
         """Matches user input to the most relevant knowledge node."""
@@ -93,29 +84,26 @@ class HuTaoSoul:
         """Primary engine for choosing what to say based on intent."""
         user_name = user_facts.get("name", "Traveler")
 
-        # 1. SPECIAL INTENT HANDLING
         if intent == "time":
             return self.get_time_response()
 
         if intent == "greet":
             greetings = [
-                f"Good evening, {user_name}! Business is quiet tonight...",
+                f"Good evening, {user_name}!", 
                 f"Aiya! Hello {user_name}!",
-                "Hee-hee, you called?",
-                f"Oh, it's you! Ready to help the Director with some... funeral marketing?~",
-                "Silly {user_name}, you look like you've seen a ghost! Oh wait, that's just me!~"
+                "Hee-hee, you called?", 
+                f"Oh, it's you! Ready for some funeral marketing, {user_name}?~"
             ]
             return random.choice(greetings), "happy"
 
         if intent == "identity":
             if "who am i" in user_input.lower():
-                # If she knows facts about the user, she uses them dynamically
                 known_facts = [f"{k} is {v}" for k, v in user_facts.items() if k != "name"]
                 if known_facts:
                     detail = random.choice(known_facts)
-                    return f"You're {user_name}! And I haven't forgotten that your {detail}. I'm a funeral director, I have to have a good memory!~", "mischief"
+                    return f"You're {user_name}! And I haven't forgotten that {detail}. I'm a funeral director, I have a good memory!~", "mischief"
                 return f"You're {user_name}, of course! Did you trip over a coffin and lose your memory?", "mischief"
-            return f"I'm Hu Tao! 77th Director of the Wangsheng Funeral Parlor. But you can just call me 'Boss'!~", "mischief"
+            return f"I'm Hu Tao! 77th Director of the Wangsheng Funeral Parlor. But you can call me 'Boss'!~", "mischief"
 
         if intent == "knowledge":
             fact = self.find_relevant_fact(user_input, brain_data)
@@ -126,20 +114,13 @@ class HuTaoSoul:
                     f"I read about that in a dusty old scroll! It said: {fact}"
                 ]
                 return random.choice(responses), "happy"
-            
-            # Fallback for when she doesn't know the specific fact
-            return random.choice([
-                "I've heard of that, but my memory is a bit fuzzy. Want to teach me?",
-                "Hmm, I'll have to ask Zhongli or the spirits about that one later!",
-                f"I'm not sure about that, {user_name}, but it sounds like a mystery worth solving!"
-            ]), "surprised"
+            return "Hmm, I'll have to ask Zhongli or the spirits about that one later!", "surprised"
 
-        # 2. DEFAULT/SOCIAL FALLBACK (The "Idle Chatter" layer)
+        # Social Fallback
         self._save()
         responses = [
             "Aiya... I was daydreaming about new poem verses again. What were we saying?",
-            "The spirits are whispering something... but I'd rather listen to you!~",
-            f"That's interesting, {user_name}! Tell me more? Or should we go for a walk?",
+            f"The spirits are whispering something... but I'd rather listen to you, {user_name}!~",
             "Hee-hee! You're quite the chatterbox today! I like that in a client.~",
             "Is it just me, or is the air getting colder? Perfect for a ghost story!"
         ]
