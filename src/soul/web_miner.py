@@ -3,6 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 import os
 import re
+import random  # FIXED: Added missing import
 from src import config
 from src.utils.logger import SoulLogger
 
@@ -22,42 +23,42 @@ class SpiritSearcher:
         if not main_content: return []
 
         text = main_content.get_text(separator=' ')
-        text = re.sub(r'\[\d+\]', '', text) # Remove citations
+        text = re.sub(r'\[\d+\]', '', text) 
         sentences = re.split(r'(?<=[.!?]) +', text)
         
-        return [s.strip() for s in sentences if 30 < len(s.strip()) < 300]
+        # Only keep sentences that look like useful facts
+        return [s.strip() for s in sentences if 40 < len(s.strip()) < 300]
 
     def mine_url(self, url):
-        SoulLogger.sys(f"Attempting to mine: {url}")
+        SoulLogger.sys(f"Mining URL: {url}")
         try:
-            if not url.startswith("http"):
-                url = "https://" + url
-                
+            if not url.startswith("http"): url = "https://" + url
             response = requests.get(url, headers=self.headers, timeout=15)
-            if response.status_code != 200:
-                return f"I couldn't get into that site. It said: Error {response.status_code}"
+            if response.status_code != 200: return f"Error {response.status_code}"
 
             knowledge_lines = self.clean_html_to_knowledge(response.text)
-            
-            if not knowledge_lines:
-                return "I looked, but I couldn't find any readable text there!"
+            if not knowledge_lines: return "No readable knowledge found."
 
-            # Create a safe filename
-            safe_name = re.sub(r'\W+', '_', url[-20:])
+            safe_name = re.sub(r'\W+', '_', url[-15:])
             file_path = os.path.join(self.output_folder, f"mined_{safe_name}.txt")
             
             with open(file_path, "w", encoding="utf-8") as f:
                 for line in knowledge_lines:
-                    # Save as 'phrase:identity'
+                    # Tags content as knowledge for the IntentBrain
                     f.write(f"{line}:knowledge\n")
 
-            SoulLogger.brain(f"Mine success! Generated {len(knowledge_lines)} facts in {file_path}")
-            return f"Success! I read the page and found {len(knowledge_lines)} facts. I'll meditate on them now!"
-
+            return f"Found {len(knowledge_lines)} facts. I'll meditate on them!"
         except Exception as e:
             SoulLogger.err(f"Miner Error: {e}")
-            return f"The spirits blocked my path to that URL: {str(e)}"
+            return f"Failed to mine: {str(e)}"
 
     def hunt_for_knowledge(self):
-        """Legacy search command for the wiki"""
-        return self.mine_url("https://genshin-impact.fandom.com/wiki/Hu_Tao/Voice-Overs")
+        """Autonomous mode: Hu Tao picks a site she's curious about."""
+        targets = [
+            "https://genshin-impact.fandom.com/wiki/Hu_Tao/Lore",
+            "https://genshin-impact.fandom.com/wiki/Wangsheng_Funeral_Parlor",
+            "https://en.wikipedia.org/wiki/Ghost"
+        ]
+        # FIXED: random is now defined
+        url = random.choice(targets)
+        return self.mine_url(url)
