@@ -1,76 +1,107 @@
-import random, json, os, re
+import random, json, os, re, importlib
 from datetime import datetime
+from difflib import SequenceMatcher
 from src import config
 from src.utils.logger import SoulLogger
 from src.database import save_fact 
 
+# Import the journal she writes to herself
+from src.soul import evolution_logic 
+
 class HuTaoSoul:
     def __init__(self):
         self.path = config.SOUL_MEMORY_PATH
+        self.lexicon_path = os.path.join(os.path.dirname(self.path), "lexicon.json")
         self.memory = self._load_memory()
+        self.lexicon = self._load_lexicon()
+        self._verify_integrity() # Self-heals missing traits on startup
 
     def _load_memory(self):
-        """Loads persistent soul data like affection and personality traits."""
-        default = {"affection": 50, "traits": {"mischief": 0.7}}
+        """Loads persistent soul data. Adjusted for academic shy personality."""
+        default = {
+            "affection": 50, 
+            "traits": {
+                "mischief": 0.1,    # Greatly reduced
+                "seriousness": 0.8, # Increased for studying
+                "cynicism": 0.05,   # Reduced
+                "warmth": 0.6       # Increased for a gentle, shy nature
+            }
+        }
         if os.path.exists(self.path):
             try:
-                with open(self.path, 'r') as f: return json.load(f)
+                with open(self.path, 'r', encoding='utf-8') as f: 
+                    return json.load(f)
             except Exception as e:
                 SoulLogger.err(f"Failed to load soul memory: {e}")
         return default
 
+    def _verify_integrity(self):
+        """Self-Healing: Ensures all required trait keys exist."""
+        defaults = {"mischief": 0.1, "seriousness": 0.8, "warmth": 0.6, "cynicism": 0.05}
+        changed = False
+        
+        if "traits" not in self.memory:
+            self.memory["traits"] = defaults
+            changed = True
+        else:
+            for key, val in defaults.items():
+                if key not in self.memory["traits"]:
+                    self.memory["traits"][key] = val
+                    SoulLogger.sys(f"Self-Repair: Restored academic trait '{key}' to soul memory.")
+                    changed = True
+        
+        if changed: self._save()
+
+    def _load_lexicon(self):
+        """Loads custom fillers. Defaulting to shy, hesitant phrases."""
+        if os.path.exists(self.lexicon_path):
+            try:
+                with open(self.lexicon_path, 'r', encoding='utf-8') as f: 
+                    return json.load(f)
+            except Exception as e:
+                SoulLogger.err(f"Failed to load lexicon: {e}")
+        return {"fillers": {"default": ["Um...", "I-I think...", "Excuse me..."]}}
+
     def _save(self):
         """Saves current state to the soul JSON file."""
-        with open(self.path, 'w', encoding='utf-8') as f: 
-            json.dump(self.memory, f, indent=4)
+        try:
+            with open(self.path, 'w', encoding='utf-8') as f: 
+                json.dump(self.memory, f, indent=4)
+        except Exception as e:
+            SoulLogger.err(f"Failed to save soul: {e}")
 
-    def get_time_response(self):
-        """Returns a randomized, personality-driven time response."""
-        now = datetime.now()
-        current_time = now.strftime('%I:%M %p')
-        time_variants = [
-            f"It's {current_time}! Perfect for a mid-day prank, don't you think?",
-            f"The clock says {current_time}. Time flies when you're having fun... or when you're a ghost!~",
-            f"It's exactly {current_time}. The spirits are most active right about now...",
-            f"Aiya, is it {current_time} already? The day is slipping away like a butterfly!",
-            f"It's {current_time}. Should we grab some tea, or maybe go for a walk?"
-        ]
-        return random.choice(time_variants), "happy"
-
-    def generate_idle_thought(self, user_facts):
-        """Generates variety for proactive messages using user-specific knowledge."""
-        name = user_facts.get("name", "Traveler")
-        hobby = user_facts.get("hobby", "wandering")
-        idle_pool = [
-            (f"Aiya, {name}! Want to go for a stroll?", "happy"),
-            (f"I was thinking about how you enjoy {hobby}... shall we?", "mischief"),
-            (f"Business is slow... want a funeral coupon, {name}?", "happy"),
-            (f"I found a butterfly! It reminded me of you!~", "happy"),
-            (f"Zhongli is off sipping tea again... come entertain me!", "mischief"),
-            (f"The border between life and death is thin today... perfect for an adventure, {name}!", "mischief")
-        ]
-        return random.choice(idle_pool)
-
-    def find_relevant_fact(self, user_input, brain_data):
-        """Matches user input to the most relevant knowledge node."""
-        from difflib import SequenceMatcher
-        best_fact, highest = None, 0
-        input_clean = user_input.lower().strip()
+    def _adjust_personality(self, user_facts):
+        """Personality drifts toward being more open as she learns about the user."""
+        traits = self.memory["traits"]
         
-        for text, intent in brain_data:
-            if intent == "knowledge":
-                score = SequenceMatcher(None, input_clean, text).ratio()
-                if score > highest:
-                    highest, best_fact = score, text
+        # Becoming slightly more confident as she knows the user's name
+        if "name" in user_facts:
+            traits["warmth"] = min(1.0, traits.get("warmth", 0.6) + 0.02)
         
-        return best_fact if highest > 0.4 else None
+        # Studying together (learning facts) increases seriousness
+        traits["seriousness"] = min(1.0, traits.get("seriousness", 0.8) + (0.01 * len(user_facts)))
+            
+        self.memory["traits"] = traits
+        self._save()
+
+    def _apply_lexicon(self, text):
+        """Styles text with academic shyness and soft punctuation."""
+        traits = self.memory["traits"]
+        
+        # Shy prefixes
+        if traits["seriousness"] > 0.7 and random.random() < 0.5:
+            prefix = random.choice(["Um, ", "I-I was thinking... ", "According to my notes, "])
+            text = prefix + text
+        
+        # Soft trailing
+        suffix = "..." if random.random() < 0.6 else "."
+        return text + suffix
 
     async def extract_and_save_facts(self, user_id, text):
-        """Autonomous memory: learns about the user during conversation."""
+        """Learns about the user to build rapport."""
         patterns = {
             "name": [r"my name is (\w+)", r"i'm (\w+)", r"call me (\w+)"],
-            "hobby": [r"i like (\w+)", r"i enjoy (\w+)", r"my hobby is (\w+)"],
-            "fear": [r"i'm scared of (\w+)", r"i hate (\w+)", r"(\w+) is scary"]
+            "subject": [r"i'm studying (\w+)", r"i like (\w+) class", r"my major is (\w+)"]
         }
         for key, regexes in patterns.items():
             for reg in regexes:
@@ -78,50 +109,75 @@ class HuTaoSoul:
                 if match:
                     fact_val = match.group(1)
                     await save_fact(user_id, key, fact_val)
-                    SoulLogger.soul(f"Memory Logged: {key} -> {fact_val}")
+                    SoulLogger.soul(f"Academic Memory Logged: {key} -> {fact_val}")
+
+    def find_relevant_fact(self, user_input, brain_data):
+        """Fuzzy-matches user input against academic knowledge nodes."""
+        best_fact, highest = None, 0
+        input_clean = user_input.lower().strip()
+        
+        for text, intent in brain_data:
+            # Check knowledge nodes or specific academic categories
+            score = SequenceMatcher(None, input_clean, text).ratio()
+            if score > highest:
+                highest, best_fact = score, text
+        return best_fact if highest > 0.4 else None
 
     def generate_thought(self, intent, brain_data, user_facts, user_input):
-        """Primary engine for choosing what to say based on intent."""
+        """Assembly line for a shy student's thoughts."""
+        
+        # Reload journal for any evolved logic
+        try:
+            importlib.reload(evolution_logic)
+        except Exception:
+            pass
+
+        self._adjust_personality(user_facts)
         user_name = user_facts.get("name", "Traveler")
+        
+        # 1. CHECK EVOLUTIONARY JOURNAL
+        if hasattr(evolution_logic, "EVOLUTIONARY_RESPONSES") and intent in evolution_logic.EVOLUTIONARY_RESPONSES:
+            log_data = evolution_logic.EVOLUTIONARY_RESPONSES[intent]
+            fact = self.find_relevant_fact(user_input, brain_data) or "a concept I haven't quite mastered yet."
+            raw_msg = log_data["response"].format(fact=fact)
+            emotion = log_data["emotion"]
+            return self._apply_lexicon(raw_msg), emotion
 
+        # 2. SHY ACADEMIC CORE INTENTS
         if intent == "time":
-            return self.get_time_response()
+            raw_msg = f"Oh, it's already {datetime.now().strftime('%I:%M %p')}... I should probably get back to my books."
+            emotion = "default"
 
-        if intent == "greet":
-            greetings = [
-                f"Good evening, {user_name}!", 
-                f"Aiya! Hello {user_name}!",
-                "Hee-hee, you called?", 
-                f"Oh, it's you! Ready for some funeral marketing, {user_name}?~"
-            ]
-            return random.choice(greetings), "happy"
+        elif intent == "greet":
+            raw_msg = f"H-hello, {user_name}. Did you come to the library to study too?"
+            emotion = "happy"
 
-        if intent == "identity":
-            if "who am i" in user_input.lower():
-                known_facts = [f"{k} is {v}" for k, v in user_facts.items() if k != "name"]
-                if known_facts:
-                    detail = random.choice(known_facts)
-                    return f"You're {user_name}! And I haven't forgotten that {detail}. I'm a funeral director, I have a good memory!~", "mischief"
-                return f"You're {user_name}, of course! Did you trip over a coffin and lose your memory?", "mischief"
-            return f"I'm Hu Tao! 77th Director of the Wangsheng Funeral Parlor. But you can call me 'Boss'!~", "mischief"
-
-        if intent == "knowledge":
+        elif intent == "knowledge":
             fact = self.find_relevant_fact(user_input, brain_data)
-            if fact:
-                responses = [
-                    f"Oh! I know something about that: {fact}",
-                    f"Aha! The spirits told me this: {fact}",
-                    f"I read about that in a dusty old scroll! It said: {fact}"
-                ]
-                return random.choice(responses), "happy"
-            return "Hmm, I'll have to ask Zhongli or the spirits about that one later!", "surprised"
+            raw_msg = f"I found a reference to that in my notes: {fact}" if fact else "I'm sorry, I haven't come across that in my research yet."
+            emotion = "happy" if fact else "surprised"
 
-        # Social Fallback
-        self._save()
-        responses = [
-            "Aiya... I was daydreaming about new poem verses again. What were we saying?",
-            f"The spirits are whispering something... but I'd rather listen to you, {user_name}!~",
-            "Hee-hee! You're quite the chatterbox today! I like that in a client.~",
-            "Is it just me, or is the air getting colder? Perfect for a ghost story!"
-        ]
-        return random.choice(responses), "happy"
+        elif intent == "gossip":
+            raw_msg = "I-I don't really listen to rumors... I prefer focusing on my assignments."
+            emotion = "default"
+
+        # 3. ACADEMIC INTENT FALLBACK
+        elif intent not in ["greet", "time", "exit", "default", "knowledge", "gossip"]:
+            relevant_facts = [phrase for phrase, label in brain_data if label == intent]
+            if relevant_facts:
+                fact = random.choice(relevant_facts)
+                raw_msg = f"Regarding {intent}... my research says: {fact}"
+                emotion = "happy"
+            else:
+                raw_msg = f"I-I've seen the term '{intent}' in a textbook, but I haven't reached that chapter yet."
+                emotion = "surprised"
+
+        # 4. DEFAULT
+        else:
+            raw_msg = random.choice([
+                f"Is there... something you needed help with, {user_name}?",
+                "I was just reviewing my notes... would you like to see?"
+            ])
+            emotion = "default"
+
+        return self._apply_lexicon(raw_msg), emotion

@@ -9,18 +9,21 @@ from src.gui import app as gui_app
 from src.logic import bot as logic_bot
 from src.soul.meditation import SoulMeditation
 from src.utils.logger import SoulLogger
+from src.utils import state  # Ensure this exists if you use state.is_running elsewhere
 
 # --- CONFIGURATION ---
 PROACTIVE_TIMEOUT = 180  # 3 Minutes of silence
 last_proactive_time = time.time()
+is_running = True  # Global flag for thread safety
 
 def resource_path(relative_path):
-    """ Handles asset paths for both dev and PyInstaller environments. """
+    """ Handles asset paths for both dev and PyInstaller (compiled) environments. """
     base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base_path, relative_path)
 
 async def handle_input():
     """ Processes text from the GUI and passes it to the bot logic. """
+    if not is_running: return
     try:
         msg = gui_app.get_message_entry_text()
         if not msg: return
@@ -37,7 +40,7 @@ async def handle_input():
         SoulLogger.err(f"Input Handling Error: {e}")
 
 async def ensure_linguistics():
-    """ Ensures TextBlob/NLTK dependencies are downloaded and ready. """
+    """ Ensures NLTK dependencies are ready for NLP tasks. """
     try:
         import nltk
         required_data = ['punkt', 'punkt_tab', 'brown', 'wordnet', 'averaged_perceptron_tagger']
@@ -49,27 +52,28 @@ async def ensure_linguistics():
 
 async def proactive_chat_monitor():
     """ Background task: Hu Tao reaches out if the user is silent for too long. """
-    global last_proactive_time
-    while True:
-        await asyncio.sleep(10) # Efficiency check every 10 seconds
+    global last_proactive_time, is_running
+    while is_running:
+        await asyncio.sleep(10) 
+        if not is_running: break
         
         idle_time = time.time() - logic_bot.last_interaction_time
         time_since_last_proactive = time.time() - last_proactive_time
         
-        # Trigger if user is idle and we haven't proactived recently
         if idle_time > PROACTIVE_TIMEOUT and time_since_last_proactive > PROACTIVE_TIMEOUT:
             if not logic_bot.processing_lock.locked():
                 try:
                     msg, emotion = await logic_bot.get_proactive_message(user_id=1)
                     gui_app.update_avatar(emotion)
                     gui_app.update_chat_log(f"Hu Tao: {msg}", sender="hutao")
-                    SoulLogger.soul("Proactive Chat triggered: Hu Tao reached out.")
+                    SoulLogger.soul("Proactive Chat triggered.")
                     last_proactive_time = time.time()
                 except Exception as e:
                     SoulLogger.err(f"Proactive Error: {e}")
 
 async def main():
-    SoulLogger.sys("--- PROJECT PARANOIA: SOUL EDITION (RESILIENCE MODE) ---")
+    global is_running
+    SoulLogger.sys("--- RESILIENCE v1.5.3: SOUL EDITION ACTIVE ---")
     
     # 1. Initialize Database
     try:
@@ -81,7 +85,6 @@ async def main():
     # 2. Setup GUI
     try:
         root.deiconify()
-        # Use resource_path for cross-platform asset loading
         gui_app.setup_gui(root, image_path=resource_path(config.HUTAO_IMAGE_PATH))
         gui_app.bind_send_button(lambda: asyncio.create_task(handle_input()))
         gui_app.bind_message_entry_return(lambda e: asyncio.create_task(handle_input()))
@@ -90,32 +93,52 @@ async def main():
         SoulLogger.err(f"GUI Error: {e}")
 
     # 3. Launch Background Souls
+    # This is where your SoulMeditation is integrated
+    meditation = SoulMeditation(logic_bot.brain)
+    
     asyncio.create_task(ensure_linguistics())
-    asyncio.create_task(SoulMeditation(logic_bot.brain).start_meditating())
+    asyncio.create_task(meditation.start_meditating())
     asyncio.create_task(proactive_chat_monitor())
     
     SoulLogger.sys("All spiritual systems launched.")
     gui_app.update_chat_log("Hu Tao: I'm here! Ready for business?~", sender="hutao")
 
-    # 4. Main Event Loop
-    while True:
+    # 4. Main Event Loop (Bridging Tkinter and Asyncio)
+    while is_running:
         try:
             root.update()
             await asyncio.sleep(0.01)
-        except tk.TclError:
-            break # Exit on window close
-        except Exception as e:
-            SoulLogger.err(f"Main Loop Error: {e}")
-            await asyncio.sleep(1)
+        except (tk.TclError, Exception) as e:
+            if isinstance(e, tk.TclError):
+                SoulLogger.sys("GUI closed. Breaking spiritual link...")
+            else:
+                SoulLogger.err(f"Main Loop Error: {e}")
+            is_running = False
+            # Update the global state if your other modules rely on it
+            state.is_running = False 
+            break
 
 if __name__ == "__main__":
     root = tk.Tk()
-    root.withdraw() # Hide window during asset loading
+    root.withdraw() 
+    
+    # Define closing behavior
+    def on_closing():
+        global is_running
+        is_running = False
+        state.is_running = False
+        root.destroy()
+
+    root.protocol("WM_DELETE_WINDOW", on_closing)
+
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
+        is_running = False
+        state.is_running = False
         SoulLogger.sys("Shutting down gracefully...")
     except Exception as fatal_e:
         with open("crash_log.txt", "w") as f:
             f.write(traceback.format_exc())
         print(f"FATAL ERROR: See crash_log.txt")
+        sys.exit(1)

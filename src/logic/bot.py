@@ -9,62 +9,69 @@ from src.utils.logger import SoulLogger
 from src import config
 from src.logic import dynamic 
 
-# Single instances for global state
+# Single instances for global state management
 brain = IntentBrain()
 soul = HuTaoSoul()
 searcher = SpiritSearcher()
 compiler = SoulCompiler()
 
-# MERGED: Using the specific active API Key provided
+# NEWS_MINER integrated with the provided active API key
 news_miner = NewsMiner(api_key="1f3284f3c5cd4781ba75a20e6e421c73") 
 
 # --- State Tracking ---
-intent_failures = []  # Tracks messages for future meditation/synthesis
+intent_failures = []       # Tracks messages that Hu Tao couldn't answer for future synthesis
 last_interaction_time = time.time()
 processing_lock = asyncio.Lock()
 last_user_message = ""
 
 async def get_proactive_message(user_id):
-    """
-    NEW: Generates a message for when Hu Tao gets bored and talks first.
-    Integrates the idle thought generation logic.
-    """
-    user_facts = await get_all_facts(user_id)
-    msg, emotion = soul.generate_idle_thought(user_facts)
-    return msg, emotion
+    """Safely attempts to generate an idle thought for when the bot speaks first."""
+    try:
+        user_facts = await get_all_facts(user_id)
+        if hasattr(soul, 'generate_idle_thought'):
+            return soul.generate_idle_thought(user_facts)
+        else:
+            return "Aiya! I forgot what I was going to say...", "surprised"
+    except Exception as e:
+        SoulLogger.err(f"Proactive Generation Error: {e}")
+        return "The spirits are being quiet today...", "default"
 
 async def process_user_message(user_message, user_id, gui_updater):
+    """
+    The main pipeline that moves from User Input -> Intent -> Soul -> GUI.
+    """
     global last_interaction_time, last_user_message, intent_failures
     
     async with processing_lock:
-        last_interaction_time = time.time() # Reset idle timer
+        last_interaction_time = time.time() 
         msg_clean = str(user_message).strip()
         msg_lower = msg_clean.lower()
         
         SoulLogger.sys(f"Processing Request: '{msg_clean}'")
 
         try:
-            # 1. SPECIAL COMMANDS (e.g., Web Mining)
+            # 1. SPECIAL COMMANDS (e.g., !mine URL)
             if msg_lower.startswith("!mine "):
-                res = await asyncio.to_thread(searcher.mine_url, msg_clean[6:].strip())
-                gui_updater.update_avatar("happy")
+                target_url = msg_clean[6:].strip()
+                gui_updater.update_chat_log("Hu Tao: Let me check the spiritual records for that... one moment!~", sender="hutao")
+                res = await asyncio.to_thread(searcher.mine_url, target_url)
+                emotion = "happy" if "Success" in res else "surprised"
+                gui_updater.update_avatar(emotion)
                 gui_updater.update_chat_log(f"Hu Tao: {res}", sender="hutao")
                 return
 
             # 2. AUTONOMOUS MEMORY ENGINE
-            # Scans input to see if user shared a personal fact
             await soul.extract_and_save_facts(user_id, msg_clean)
 
             # 3. INTENT PREDICTION
             intent = brain.predict(msg_clean)
             
-            # --- Synthesis Tracking ---
+            # Record failures for later "Meditation" (Synthesis)
             if intent == "default":
                 intent_failures.append(msg_clean)
-                if len(intent_failures) > 10: 
-                    intent_failures.pop(0)
+                if len(intent_failures) > 10: intent_failures.pop(0)
 
-            # 4. DYNAMIC FEATURE EXECUTION (Power Synthesis)
+            # 4. DYNAMIC FEATURE EXECUTION
             if intent == "dynamic_feature":
                 for f_key in compiler.registry.keys():
                     trigger = f_key.split("_")[0]
@@ -75,15 +82,33 @@ async def process_user_message(user_message, user_id, gui_updater):
                         gui_updater.update_chat_log(f"Hu Tao: {res}", sender="hutao")
                         return
 
+            # --- 4.5 GOSSIP / NEWS TRIGGER ---
+            # Triggers if the brain predicts "gossip" OR keywords are found
+            if intent == "gossip" or "gossip" in msg_lower or "news" in msg_lower:
+                gui_updater.update_chat_log("Hu Tao: One second... let me check the headlines...", sender="hutao")
+                
+                # Call the miner in a thread to prevent GUI freezing
+                report, raw_articles = await asyncio.to_thread(news_miner.gather_gossip)
+                
+                # Double-persist the news as knowledge for long-term memory
+                if raw_articles:
+                    filename = os.path.join(config.KNOWLEDGE_DIR, "live_news.txt")
+                    with open(filename, "a", encoding="utf-8") as f:
+                        for art in raw_articles:
+                            # Added newline for cleaner file structure
+                            f.write(f"I heard that {art}:knowledge\n")
+
+                gui_updater.update_avatar("happy")
+                gui_updater.update_chat_log(f"Hu Tao: {report}", sender="hutao")
+                return
+
             # 5. NORMAL CONVERSATION & THOUGHT GENERATION
             last_user_message = msg_clean
             user_facts = await get_all_facts(user_id)
             
-            # generate_thought returns (response, emotion)
             response, emotion = soul.generate_thought(intent, brain.data, user_facts, msg_clean)
             
-            # --- THE FIX FOR THE SCREENSHOT/KNOWLEDGE BUG ---
-            # If soul returns None, it fails to find a fact; log for meditation
+            # Knowledge fallback
             if response is None:
                 intent_failures.append(msg_clean)
                 response = "Aiya... I'm not sure about that. Teach me, or let me meditate on it!~"
@@ -93,7 +118,7 @@ async def process_user_message(user_message, user_id, gui_updater):
             gui_updater.update_avatar(emotion)
             gui_updater.update_chat_log(f"Hu Tao: {response}", sender="hutao")
             
-            # Save to database history
+            # Persist to DB
             _, hist = await get_chat_session(user_id)
             new_history = hist + [f"U: {msg_clean}", f"H: {response}"]
             await save_chat_session(user_id, "soul_chat", new_history)
@@ -101,3 +126,4 @@ async def process_user_message(user_message, user_id, gui_updater):
         except Exception as e:
             SoulLogger.err(f"Bot Logic Error: {e}")
             gui_updater.update_avatar("sad")
+            gui_updater.update_chat_log("Aiya! My head hurts... even spirits get headaches sometimes!", sender="hutao")

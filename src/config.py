@@ -69,3 +69,6 @@ EMOTION_COLORS = {
 
 # --- Activities ---
 ACTIVITY_DURATION = 60
+
+# --- System State ---
+IS_RUNNING = True  # Added to break circular imports

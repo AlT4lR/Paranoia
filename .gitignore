@@ -1,6 +1,13 @@
-# Ignore python cache
+# --- Hu Tao's Heavy Data Block ---
+# Block all heavy pickle and JSON memory files
+data/*.pkl
+data/*.json
+data/*.db
+
+# Block the entire virtual environment
+.venv/
+
+# Block compiled python files
 __pycache__/
 *.pyc
-
-# Ignore heavy virtual env
-.venv/
+data/brain_model.pkl
